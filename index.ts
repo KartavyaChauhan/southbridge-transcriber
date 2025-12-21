@@ -6,6 +6,7 @@ import path from 'path';
 import { extractAudio } from './audio';
 import { GeminiClient } from './ai';
 import { splitAudio } from './splitter';
+import { saveOutput } from './formatting';
 
 // Duration of our chunks in seconds (Must match splitter.ts)
 const CHUNK_DURATION_SECONDS = 20 * 60; 
@@ -107,11 +108,13 @@ async function run(filePath: string, options: any) {
       fullTranscript = fullTranscript.concat(adjustedData);
     }
 
-    // 7. Output Final Result
-    console.log(chalk.cyan.bold('\n--- Final Merged Transcript ---'));
-    console.log(JSON.stringify(fullTranscript, null, 2));
-
-    // Phase 4 will save this to .srt
+    // 7. Output Result
+    console.log(chalk.cyan.bold('\n--- Generating SRT ---'));
+    
+    // Instead of printing huge JSON, we save to file
+    saveOutput(absolutePath, fullTranscript);
+    
+    console.log(chalk.gray('Job complete.'));
     
   } catch (error: any) {
     console.error(chalk.red('\nFatal Error:'), error.message);

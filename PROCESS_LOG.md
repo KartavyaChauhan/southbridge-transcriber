@@ -65,3 +65,11 @@ const CANDIDATE_MODELS = [
 - Google's model naming conventions change frequently. Always verify available models via the ListModels API.
 - The `models/` prefix is required when using the Google Generative AI SDK.
 - Keep multiple fallback models to handle quota exhaustion gracefully.
+
+Integrated splitter.ts into the main index.ts pipeline. Logic Implemented:
+
+Audio file is split into chunks (default 20 mins).
+
+Iterated through chunks sequentially.
+
+Timestamp Correction: Added a timeOffset logic. If we are on Chunk 2 (starts at 20:00), we add 1200 seconds to every timestamp returned by the AI. This ensures the final JSON has absolute timestamps matching the original video.
