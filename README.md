@@ -77,7 +77,8 @@ bunx sb-transcribe video.mp4 -f md
 bunx sb-transcribe video.mp4 -k YOUR_API_KEY
 
 # Combine options
-bunx sb-transcribe video.mp4 -f vtt -k YOUR_API_KEY
+bunx sb-transcribe video.mp4 -f vtt -k YOUR_API_KEY 
+```
 
 ## 📂 Project Structure
 
@@ -99,35 +100,24 @@ SOUTHBRIDGE-TRANSCRIBER/
 ├── package.json                 # Dependencies & Bin configuration
 ├── PROCESS_LOG.md               # Dev diary of architectural decisions
 └── README.md                    # This file
+```
 
 ## 🏗️ Architecture & Flow
-Input: User provides a video file (e.g., movie.mp4).
 
-Extraction: audio.ts uses FFmpeg to create a lightweight movie.mp3.
-
-Analysis (The "Splitter"):
-
-splitter.ts checks duration.
-
-If > 20 mins: It splits audio into 20-minute chunks to prevent AI hallucination/drift.
-
-If < 20 mins: It processes the file as a single unit.
-
-Transcription Loop:
-
-index.ts iterates through every chunk.
-
-ai.ts uploads audio to Gemini and waits for processing.
-
-Retry Logic: If a model hits a rate limit (429), it auto-switches to a fallback model.
-
-Intermediates: Raw JSON responses are saved to .southbridge_intermediates/{filename}/ for debugging.
-
-Assembly:
-
-Timestamps are offset (e.g., Chunk 2 starts at 20:00).
-
-formatting.ts calculates end-times and generates the final file (.srt, .vtt, or .md).
+1. **Input:** User provides a video file (e.g., `movie.mp4`).
+2. **Extraction:** `audio.ts` uses FFmpeg to create a lightweight `movie.mp3`.
+3. **Analysis (The "Splitter"):**
+   * `splitter.ts` checks duration.
+   * If **> 20 mins**: It splits audio into 20-minute chunks to prevent AI hallucination/drift.
+   * If **< 20 mins**: It processes the file as a single unit.
+4. **Transcription Loop:**
+   * `index.ts` iterates through every chunk.
+   * `ai.ts` uploads audio to Gemini and waits for processing.
+   * **Retry Logic:** If a model hits a rate limit (429), it auto-switches to a fallback model.
+   * **Intermediates:** Raw JSON responses are saved to `.southbridge_intermediates/{filename}/` for debugging.
+5. **Assembly:**
+   * Timestamps are offset (e.g., Chunk 2 starts at 20:00).
+   * `formatting.ts` calculates end-times and generates the final file (`.srt`, `.vtt`, or `.md`).
 
 ## ⚠️ Known Limitations
 
