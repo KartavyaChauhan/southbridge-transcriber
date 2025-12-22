@@ -1,6 +1,5 @@
 # Process Log - Southbridge Transcriber
 
-
 Started the project with the goal of building a multimodal transcription tool.
 I have chosen to use **Bun** as the runtime because it is faster for local CLI tools and was requested in the spec.
 I am using **TypeScript** to ensure type safety, especially when handling the complex JSON responses we expect from the LLM later.
@@ -56,6 +55,7 @@ const CANDIDATE_MODELS = [
 ```
 
 **Lesson Learned/Issues:**
+
 - Google's model naming conventions change frequently. Always verify available models via the ListModels API.
 - The `models/` prefix is required when using the Google Generative AI SDK.
 - Keep multiple fallback models to handle quota exhaustion gracefully.
