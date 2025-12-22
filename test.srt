@@ -12,87 +12,87 @@
 
 4
 00:00:25,000 --> 00:00:32,000
-[Speaker 4] Yes, it's important, but we're also busy with our regular jobs. It will be difficult to fit things in.
+[Speaker 4] Yes, it's important, but we're also busy with our regular jobs. It'll be difficult to fit things in.
 
 5
 00:00:32,000 --> 00:00:38,000
-[Speaker 2] It's okay, Matteo. We'll work it out. I know that you all have a lot on at the moment combining this project with your regular jobs.
+[Speaker 2] It's okay, Matteo, we'll work it out. I know that you all have a lot on at the moment combining this project with your regular jobs.
 
 6
 00:00:38,000 --> 00:00:41,000
 [Speaker 5] So, what do we need to do and by when?
 
 7
-00:00:41,000 --> 00:00:53,000
+00:00:41,000 --> 00:00:52,000
 [Speaker 2] Good questions, Barbara. We have a number of key deliverables to discuss, so it's essential we're all in agreement about roles and responsibilities and also the timelines we're working to.
 
 8
-00:00:53,000 --> 00:00:55,000
-[Speaker 3] Great. Yes, it's good to get this clear.
+00:00:52,000 --> 00:00:53,000
+[Speaker 3] Great.
 
 9
+00:00:53,000 --> 00:00:55,000
+[Speaker 4] Yes, it's good to get this clear.
+
+10
 00:00:55,000 --> 00:01:04,000
 [Speaker 2] So, the first thing we need to do is design the customer survey questionnaire. In my experience, this is best done through an online survey tool.
 
-10
+11
 00:01:04,000 --> 00:01:08,000
 [Speaker 5] That sounds like a great idea. I'm glad you have experience with this.
 
-11
+12
 00:01:08,000 --> 00:01:11,000
 [Speaker 2] Yeah, we've done something similar on previous projects.
 
-12
-00:01:11,000 --> 00:01:13,000
-[Speaker 6] So, will you do that, John?
-
 13
-00:01:13,000 --> 00:01:29,000
-[Speaker 2] I'd love to, but I'm already tied up managing this project and my line manager Kate has agreed that I should focus on the timelines, reporting and financial management. I'd like Akiko to lead on the questionnaire. You learned about this on your marketing and PR course, didn't you?
+00:01:11,000 --> 00:01:13,000
+[Speaker 4] So, will you do that, John?
 
 14
+00:01:13,000 --> 00:01:29,000
+[Speaker 2] I'd love to, but I'm already tied up managing this project and my line manager Kate has agreed that I should focus on the timelines, reporting, and financial management. I'd like Akiko to lead on the questionnaire. You learned about this on your marketing and PR course, didn't you?
+
+15
 00:01:29,000 --> 00:01:31,000
 [Speaker 3] Yeah. Happy to take it on.
 
-15
+16
 00:01:31,000 --> 00:01:39,000
 [Speaker 2] Thanks, Akiko. Next thing is we need the new designs finalized. Matteo, you said you could do this in a couple of weeks, right?
 
-16
-00:01:39,000 --> 00:01:51,000
-[Speaker 4] Yeah, I know, but that was last month, and then nothing happened. I'm overloaded at the moment and my line manager won't be happy if I don't hit my targets. Sorry, but this project has to take lower priority.
-
 17
+00:01:39,000 --> 00:01:51,000
+[Speaker 4] Yeah, I know, but that was last month and then nothing happened. I'm overloaded at the moment and my line manager won't be happy if I don't hit my targets. Sorry, but this project has to take lower priority.
+
+18
 00:01:51,000 --> 00:02:02,000
 [Speaker 2] Hmm. I see. I can understand the challenge you're facing. I've been in that situation before. So, what can we do to help you hit those targets and free up some time?
 
-18
+19
 00:02:02,000 --> 00:02:11,000
 [Speaker 4] That's a good question. If I could get a slight reduction in my targets, I could use the extra time that would create to finish the designs for this project.
 
-19
+20
 00:02:11,000 --> 00:02:16,000
 [Speaker 2] Okay. We might not be able to get your targets reduced, but I'll see what we can do.
 
-20
+21
 00:02:16,000 --> 00:02:28,000
 [Speaker 5] How about if I support Matteo there? I know his job well and I have some capacity at the moment. I can help him meet his targets so he can free up some time to finish the designs for this project.
 
-21
+22
 00:02:28,000 --> 00:02:36,000
 [Speaker 2] Could you, Barbara? Hmm. I'm not sure if it's fair to ask Barbara to be supporting Matteo in his regular job so he can work on this project.
 
-22
-00:02:36,000 --> 00:02:46,000
-[Speaker 5] It's up to you, but I'm happy to support Matteo with his regular work. Just for a couple of weeks so he can create the designs. He's the only one with the expertise.
-
 23
-00:02:46,000 --> 00:02:51,000
-[Speaker 2] Yeah, you're right. Okay. Thanks a lot, Barbara. I appreciate it.
+00:02:36,000 --> 00:02:46,000
+[Speaker 5] It's up to you, but I'm happy to support Matteo with his regular work just for a couple of weeks so he can create the designs. He's the only one with the expertise.
 
 24
-00:02:51,000 --> 00:02:53,000
-[Speaker 2] Matteo, would that work for you?
+00:02:46,000 --> 00:02:53,000
+[Speaker 2] Yeah, you're right. Okay. Thanks a lot, Barbara. I appreciate it. Matteo, would that work for you?
 
 25
 00:02:53,000 --> 00:02:58,000
@@ -108,5 +108,5 @@
 
 28
 00:03:12,000 --> 00:03:15,000
-[Speaker 1] This recording is from the British Council. To find more activities to practice your English, visit www.britishcouncil.org/learnenglish.
+[Speaker 1] This recording is from the British Council. To find more activities to practice your English, visit www.britishcouncil.org/learnenglish
 

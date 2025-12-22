@@ -1,127 +1,136 @@
-# 🐸 Southbridge Transcriber
+# Southbridge Transcriber 🐸
 
-A multimodal transcription and diarization tool that uses Google's Gemini AI to convert video/audio files into accurate, timestamped subtitles with speaker identification.
+A robust, multimodal AI transcription and diarization tool built for the Southbridge take-home assignment. It acts as a unified "Level 2" solution, combining the architectural strengths of reference tools (`ipgu`, `offmute`, `meeting-diary`) into a single, production-ready CLI.
 
-## Features
+## 🚀 Features
 
-- **Video & Audio Support**: Accepts MP4, MKV, AVI, MOV, WebM, MP3, WAV, M4A, FLAC, OGG
-- **Speaker Diarization**: Automatically identifies and labels different speakers
-- **Accurate Timestamps**: Timestamps with automatic drift correction for long files
-- **Smart Chunking**: Splits long audio into manageable pieces to prevent AI drift
-- **Model Fallback**: Automatically switches Gemini models if quota is hit
-- **Intermediate Saving**: Saves raw AI responses for debugging and inspection
-- **SRT Output**: Generates industry-standard subtitle files
+* **Multimodal Intelligence:** Uses the latest **Google Gemini 2.0 & 2.5** models to "hear" audio directly, capturing nuance and tone better than text-only pipelines.
+* **Reliability & Scalability:** Implements smart **Audio Chunking** (splitting files >20 mins) to prevent LLM timestamp drift and timeout errors.
+* **Speaker Diarization:** Leveraging Gemini's multimodal capabilities to automatically identify and label distinct speakers.
+* **Multi-Format Output:** Generates **SRT** (Subtitles), **VTT** (Web Captions), and **Markdown** (Meeting Summaries). Default is SRT.
+* **Resilience:** Includes **smart fallback logic** that automatically switches AI models (e.g., Flash → Pro) specifically when API quota limits (429 errors) are hit.
+* **Debug Traceability:** Saves raw "Intermediate" AI responses in auto-generated subfolders (`.southbridge_intermediates/{filename}/`) for inspection.
+* **Smart Caching:** Skips expensive audio extraction and splitting steps if the artifacts already exist.
 
-## Installation
+## 🛠️ Tech Stack
 
+* **Runtime:** [Bun](https://bun.sh/) (Fast JavaScript runtime)
+* **Language:** TypeScript
+* **AI Model:** Google Gemini Multimodal API (`@google/generative-ai`)
+* **Media Processing:** [FFmpeg](https://ffmpeg.org/) (via `fluent-ffmpeg`)
+* **CLI Framework:** Commander.js
+* **Utilities:** `ora` (spinners), `chalk` (styling)
+
+## 📋 Prerequisites
+
+1.  **Bun:** You must have Bun installed.
+    ```bash
+    curl -fsSL [https://bun.sh/install](https://bun.sh/install) | bash
+    ```
+2.  **FFmpeg:** Must be installed and available in your system PATH (used for audio extraction and splitting).
+3.  **Google Gemini API Key:** Get a free key from [Google AI Studio](https://aistudio.google.com/).
+
+## ⚙️ Installation & Setup
+
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/YourUsername/southbridge-transcriber.git](https://github.com/YourUsername/southbridge-transcriber.git)
+    cd southbridge-transcriber
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    bun install
+    ```
+
+3.  **Configure Environment:**
+    Create a `.env` file in the root directory:
+    ```env
+    GEMINI_API_KEY=your_actual_api_key_here
+    ```
+
+## 🏃 Usage
+
+You can run the tool in multiple ways. The tool accepts video (`.mp4`, `.mov`, `.mkv`) or audio (`.mp3`, `.wav`) files.
+
+### Ways to Run
 ```bash
-# Clone the repository
-git clone https://github.com/KartavyaChauhan/southbridge-transcriber.git
-cd southbridge-transcriber
+# Using bunx (Recommended - simulates installed package)
+bunx sb-transcribe test.mp4
 
-# Install dependencies
-bun install
-```
+# Using bun run
+bun run index.ts test.mp4
 
-## Configuration
+# Using bun directly
+bun index.ts test.mp4
 
-1. Create a `.env` file in the project root:
-```
-GEMINI_API_KEY=your_api_key_here
-```
+# Default (Generates SRT)
+bunx sb-transcribe video.mp4
 
-2. Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+# Generate VTT (Web Captions)
+bunx sb-transcribe video.mp4 --format vtt
 
-## Usage
+# Generate Markdown (Meeting Summary)
+bunx sb-transcribe video.mp4 -f md
 
-```bash
-# Basic usage
-bun run index.ts <video_or_audio_file>
+# With inline API key (overrides .env)
+bunx sb-transcribe video.mp4 -k YOUR_API_KEY
 
-# Examples
-bun run index.ts interview.mp4
-bun run index.ts podcast.mp3
+# Combine options
+bunx sb-transcribe video.mp4 -f vtt -k YOUR_API_KEY
 
-# With API key flag (alternative to .env)
-bun run index.ts video.mp4 --key YOUR_API_KEY
-```
+## 📂 Project Structure
 
-## Output
+```text
+SOUTHBRIDGE-TRANSCRIBER/
+├── .southbridge_intermediates/  # Stores raw debug data (JSON)
+│   └── test/                    # Subfolder per input file (Namespacing)
+│       ├── chunk_1_raw.json     # The raw response from Gemini
+│       └── chunk_2_raw.json
+├── node_modules/
+├── test_chunks/                 # Temporary split audio parts (created if file >20m)
+├── .env                         # API Key config
+├── ai.ts                        # "The Brain": Manages Gemini API, polling & retries
+├── audio.ts                     # "The Extractor": FFmpeg logic to strip video
+├── config.ts                    # "The Settings": Central config (Prompts, Models, Durations)
+├── formatting.ts                # "The Translator": Converts JSON -> SRT/VTT/MD
+├── index.ts                     # "The Manager": CLI entry point & orchestration
+├── splitter.ts                  # "The Scalability": Logic to split long audio files
+├── package.json                 # Dependencies & Bin configuration
+├── PROCESS_LOG.md               # Dev diary of architectural decisions
+└── README.md                    # This file
 
-The tool generates:
-- `{filename}.srt` - Subtitle file with timestamps and speaker labels
-- `.southbridge_intermediates/{filename}/` - Raw AI responses for debugging
+## 🏗️ Architecture & Flow
+Input: User provides a video file (e.g., movie.mp4).
 
-## Project Structure
+Extraction: audio.ts uses FFmpeg to create a lightweight movie.mp3.
 
-```
-southbridge-transcriber/
-├── index.ts          # CLI entry point & main pipeline
-├── config.ts         # Centralized configuration
-├── audio.ts          # FFmpeg audio extraction
-├── splitter.ts       # Audio chunking for long files
-├── ai.ts             # Gemini AI client with fallback logic
-├── formatting.ts     # SRT file generation
-└── .env              # API key (not committed)
-```
+Analysis (The "Splitter"):
 
-## Pipeline Flow
+splitter.ts checks duration.
 
-```
-Input (video/audio)
-    ↓
-Audio Extraction (FFmpeg)
-    ↓
-Chunking (20-min segments)
-    ↓
-AI Transcription (Gemini)
-    ↓
-Timestamp Correction
-    ↓
-SRT Generation
-```
+If > 20 mins: It splits audio into 20-minute chunks to prevent AI hallucination/drift.
 
-## Configuration Options
+If < 20 mins: It processes the file as a single unit.
 
-All configurable parameters are in `config.ts`:
+Transcription Loop:
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `CHUNK_DURATION_MINUTES` | 20 | Length of audio chunks |
-| `AUDIO_BITRATE` | 128k | Audio quality for extraction |
-| `CANDIDATE_MODELS` | gemini-2.5-flash, etc. | AI models to try |
-| `MIN_SUBTITLE_DURATION` | 1 sec | Minimum subtitle display time |
+index.ts iterates through every chunk.
 
-## Supported Formats
+ai.ts uploads audio to Gemini and waits for processing.
 
-**Video**: `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`  
-**Audio**: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`
+Retry Logic: If a model hits a rate limit (429), it auto-switches to a fallback model.
 
-## Known Limitations
+Intermediates: Raw JSON responses are saved to .southbridge_intermediates/{filename}/ for debugging.
 
-1. **Speaker Accuracy**: May misidentify speakers in crosstalk or with similar voices
-2. **Timestamp Precision**: Approximate ±2 seconds, especially in long files
-3. **Language**: Optimized for English; other languages may have reduced accuracy
-4. **File Size**: Max ~2GB per upload; very long files (>3 hours) may timeout
-5. **Audio Quality**: Poor recordings = poor transcription
+Assembly:
 
-## Error Handling
+Timestamps are offset (e.g., Chunk 2 starts at 20:00).
 
-The tool handles:
-- Missing files with clear error messages
-- Unsupported formats with format hints
-- API quota limits with automatic model fallback
-- Network failures with graceful exit
+formatting.ts calculates end-times and generates the final file (.srt, .vtt, or .md).
 
-## Dependencies
+## ⚠️ Known Limitations
 
-- [Bun](https://bun.sh) - JavaScript runtime
-- [FFmpeg](https://ffmpeg.org) - Audio/video processing
-- [@google/generative-ai](https://www.npmjs.com/package/@google/generative-ai) - Gemini AI SDK
-- [Commander](https://www.npmjs.com/package/commander) - CLI framework
-- [Chalk](https://www.npmjs.com/package/chalk) - Terminal styling
-- [Ora](https://www.npmjs.com/package/ora) - Terminal spinners
-
-## License
-
-ISC
+* **Speaker Accuracy:** AI may misidentify speakers during crosstalk (multiple people talking at once) or in noisy audio environments.
+* **Timestamp Precision:** While chunking mitigates drift, timestamps are approximate (±1-2 seconds) compared to waveform-aligned tools.
+* **File Size:** Very large files (>3 hours) are technically supported via chunking but may hit daily API cost limits depending on your Google Cloud plan.
