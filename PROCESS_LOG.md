@@ -139,3 +139,38 @@ program.parse();
 8. Asked to fic Configurable Parameters so it help me by creating config.ts - Centralized Configuration
 
 9. then asked to help output SRT, VTT, or MD file	and accessible via npx/bunx or bun link.
+
+**Learnings from all three packages**
+
+1. From ipgu — Timestamp Alignment
+
+Learning:
+Long audio/video causes timestamp drift in LLM-based transcription; processing everything in one pass leads to inaccurate timings.
+
+Incorporation:
+Audio is split into fixed 20-minute chunks (splitter.ts) and processed sequentially. During assembly (index.ts), a deterministic time offset is applied to each chunk’s timestamps to restore absolute alignment.
+
+Outcome:
+Accurate timestamps are preserved across long files without iterative realignment.
+
+2. From offmute — Multimodal Transcription
+
+Learning:
+Text-first pipelines lose information such as tone, pauses, and speaker nuance. Multimodal models perform better when they process raw audio directly.
+
+Incorporation:
+The pipeline uploads extracted audio files directly to Gemini via the multimodal API (ai.ts), bypassing traditional audio→text transcription services.
+
+Outcome:
+The model “hears” the audio natively, improving speaker separation and contextual understanding.
+
+3. From meeting-diary — Diarization & Structured Output
+
+Learning:
+Transcripts are only useful if speakers are clearly identified and outputs are well-structured for downstream use.
+
+Incorporation:
+The system prompt explicitly instructs the LLM to perform speaker diarization. Outputs are normalized and exported into standard formats (.srt, .vtt, .md) via formatting.ts.
+
+Outcome:
+Clean, speaker-labeled transcripts comparable to meeting-diary outputs, without relying on external diarization APIs.
