@@ -78,6 +78,7 @@ Safety: Refactored intermediate logging to use subfolders, preventing overwrites
 
 
 **Prompts Used**
+
 I used two AI tools during this assignment: Google Gemini (Pro/Flash) and GitHub Copilot (Claude Opus 4.5).
 The prompts used are numbered below. I have included only the main prompts that were essential to the assignment, as some interactions were minor (e.g., asking the AI to proceed to the next step or to confirm results).
 
