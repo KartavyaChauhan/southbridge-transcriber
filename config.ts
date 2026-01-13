@@ -71,6 +71,74 @@ OUTPUT RULES:
 4. Do not summarize. Transcribe verbatim.
 `;
 
+/**
+ * Report generation prompt.
+ * Used when --report flag is passed to generate a meeting summary.
+ */
+export const REPORT_PROMPT = `
+You are an expert meeting analyst. Analyze the following transcript and generate a comprehensive meeting report.
+
+OUTPUT RULES:
+1. Output MUST be valid JSON.
+2. Structure:
+{
+  "title": "Brief meeting title based on content",
+  "summary": "2-3 paragraph executive summary",
+  "keyPoints": ["Key point 1", "Key point 2", ...],
+  "decisions": ["Decision 1", "Decision 2", ...],
+  "actionItems": [
+    { "owner": "Person name", "task": "Task description", "deadline": "If mentioned" }
+  ],
+  "topics": ["Topic 1", "Topic 2", ...],
+  "participants": ["Speaker 1", "Speaker 2", ...]
+}
+3. Be thorough but concise.
+4. If no decisions or action items are found, use empty arrays.
+5. Extract specific names, dates, and commitments when mentioned.
+`;
+
+// ===========================================
+// COST ESTIMATION
+// ===========================================
+
+/**
+ * Estimated costs per million tokens (USD)
+ * These are approximate and may change - check Google's pricing page for current rates.
+ * https://ai.google.dev/pricing
+ */
+export const MODEL_COSTS: Record<string, { input: number; output: number }> = {
+  'models/gemini-2.5-pro': { input: 1.25, output: 10.00 },
+  'models/gemini-2.5-flash': { input: 0.15, output: 0.60 },
+  'models/gemini-2.0-flash': { input: 0.10, output: 0.40 },
+  'models/gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
+};
+
+// ===========================================
+// PRESETS
+// ===========================================
+
+/**
+ * Preset configurations for common use cases.
+ * Use with --preset flag.
+ */
+export const PRESETS: Record<string, { model: string; chunkMinutes: number; description: string }> = {
+  'fast': {
+    model: 'flash',
+    chunkMinutes: 60,
+    description: 'Fast processing with Gemini Flash (good for quick transcriptions)'
+  },
+  'quality': {
+    model: 'pro',
+    chunkMinutes: 120,
+    description: 'High-quality with Gemini Pro (best for important meetings)'
+  },
+  'lite': {
+    model: 'flash-lite',
+    chunkMinutes: 30,
+    description: 'Lightweight processing (lowest cost, acceptable quality)'
+  }
+};
+
 // ===========================================
 // OUTPUT CONFIGURATION
 // ===========================================

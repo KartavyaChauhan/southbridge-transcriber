@@ -203,6 +203,96 @@ export function generateJson(transcript: TranscriptItem[], originalFilePath: str
 }
 
 /**
+ * Report structure returned by the AI
+ */
+export interface MeetingReport {
+  title: string;
+  summary: string;
+  keyPoints: string[];
+  decisions: string[];
+  actionItems: Array<{ owner: string; task: string; deadline?: string }>;
+  topics: string[];
+  participants: string[];
+}
+
+/**
+ * Generates a formatted Markdown report from the AI analysis.
+ */
+export function generateReportMarkdown(report: MeetingReport, originalFilePath: string): string {
+  const fileName = path.basename(originalFilePath);
+  const generatedDate = new Date().toLocaleString();
+  
+  let md = `# ${report.title || 'Meeting Report'}\n\n`;
+  md += `_Generated on ${generatedDate}_\n`;
+  md += `_Source: ${fileName}_\n\n`;
+  
+  // Summary
+  md += `## Summary\n\n${report.summary || 'No summary available.'}\n\n`;
+  
+  // Participants
+  if (report.participants && report.participants.length > 0) {
+    md += `## Participants\n\n`;
+    report.participants.forEach(p => {
+      md += `- ${p}\n`;
+    });
+    md += '\n';
+  }
+  
+  // Key Points
+  if (report.keyPoints && report.keyPoints.length > 0) {
+    md += `## Key Points\n\n`;
+    report.keyPoints.forEach(point => {
+      md += `- ${point}\n`;
+    });
+    md += '\n';
+  }
+  
+  // Topics Discussed
+  if (report.topics && report.topics.length > 0) {
+    md += `## Topics Discussed\n\n`;
+    report.topics.forEach(topic => {
+      md += `- ${topic}\n`;
+    });
+    md += '\n';
+  }
+  
+  // Decisions
+  if (report.decisions && report.decisions.length > 0) {
+    md += `## Decisions Made\n\n`;
+    report.decisions.forEach((decision, i) => {
+      md += `${i + 1}. ${decision}\n`;
+    });
+    md += '\n';
+  }
+  
+  // Action Items
+  if (report.actionItems && report.actionItems.length > 0) {
+    md += `## Action Items\n\n`;
+    md += `| Owner | Task | Deadline |\n`;
+    md += `|-------|------|----------|\n`;
+    report.actionItems.forEach(item => {
+      md += `| ${item.owner || 'TBD'} | ${item.task} | ${item.deadline || '-'} |\n`;
+    });
+    md += '\n';
+  }
+  
+  return md;
+}
+
+/**
+ * Saves the meeting report to a markdown file.
+ */
+export function saveReport(originalFilePath: string, report: MeetingReport): string {
+  const parse = path.parse(originalFilePath);
+  const outputPath = path.join(parse.dir, `${parse.name}_report.md`);
+  
+  const content = generateReportMarkdown(report, originalFilePath);
+  fs.writeFileSync(outputPath, content);
+  console.log(chalk.green(`\n📋 Saved Report: ${outputPath}`));
+  return outputPath;
+}
+
+/**
  * Saves the transcript to the specified format next to the input video.
  */
 export function saveOutput(originalFilePath: string, transcript: TranscriptItem[], format: OutputFormat = 'srt') {

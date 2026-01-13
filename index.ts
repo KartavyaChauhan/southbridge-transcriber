@@ -7,8 +7,8 @@ import readline from 'readline';
 import { extractAudio } from './audio';
 import { GeminiClient } from './ai';
 import { splitAudio } from './splitter';
-import { saveOutput, type OutputFormat } from './formatting';
-import { SUPPORTED_FORMATS } from './config'; 
+import { saveOutput, saveReport, type OutputFormat, type MeetingReport } from './formatting';
+import { SUPPORTED_FORMATS, PRESETS } from './config'; 
 
 const program = new Command();
 
@@ -23,6 +23,9 @@ program
   .option('-s, --speakers <names...>', 'Known speaker names (e.g., -s "John" "Barbara")')
   .option('-i, --instructions <text>', 'Custom instructions for the AI')
   .option('-ac, --audio-chunk-minutes <minutes>', 'Audio chunk duration in minutes', '120')
+  .option('-r, --report', 'Generate a meeting report with key points and action items')
+  .option('-p, --preset <preset>', 'Use a preset: fast, quality, or lite')
+  .option('--show-cost', 'Show estimated API cost after processing')
   .option('--no-interactive', 'Skip interactive speaker identification')
   .action((filePath, options) => {
     run(filePath, options);
@@ -145,6 +148,23 @@ async function run(filePath: string, options: any) {
   }
 
   try {
+    // Apply preset if specified (presets can be overridden by explicit flags)
+    if (options.preset) {
+      const preset = PRESETS[options.preset];
+      if (!preset) {
+        console.error(chalk.red(`Error: Unknown preset "${options.preset}". Available: ${Object.keys(PRESETS).join(', ')}`));
+        process.exit(1);
+      }
+      console.log(chalk.cyan(`Using preset: ${options.preset} - ${preset.description}`));
+      // Apply preset values (but don't override explicit CLI args)
+      if (!program.opts().model || options.model === 'pro') {
+        options.model = preset.model;
+      }
+      if (!program.opts().audioChunkMinutes) {
+        options.audioChunkMinutes = String(preset.chunkMinutes);
+      }
+    }
+    
     // Parse chunk duration from CLI option
     const chunkDurationMinutes = parseInt(options.audioChunkMinutes) || 120;
     const chunkDurationSeconds = chunkDurationMinutes * 60;
@@ -249,7 +269,28 @@ async function run(filePath: string, options: any) {
     // Save to the specified format
     saveOutput(absolutePath, fullTranscript, outputFormat);
     
-    console.log(chalk.gray('Job complete.'));
+    // 9. Generate Report (if requested)
+    if (options.report) {
+      console.log(chalk.cyan.bold('\n--- Generating Meeting Report ---'));
+      try {
+        const report = await client.generateReport(fullTranscript) as MeetingReport;
+        saveReport(absolutePath, report);
+      } catch (error: any) {
+        console.error(chalk.yellow('Warning: Could not generate report:'), error.message);
+      }
+    }
+    
+    // 10. Show Cost Estimation (if requested)
+    if (options.showCost) {
+      const { total, breakdown } = client.getCostEstimate();
+      console.log(chalk.cyan.bold('\n--- Cost Estimation ---'));
+      breakdown.forEach((stat) => {
+        console.log(chalk.gray(`  ${stat.model}: ${stat.inputTokens.toLocaleString()} input + ${stat.outputTokens.toLocaleString()} output tokens`));
+      });
+      console.log(chalk.green(`  Total estimated cost: $${total.toFixed(4)}`));
+    }
+    
+    console.log(chalk.green.bold('\n✅ Job complete.'));
     
   } catch (error: any) {
     console.error(chalk.red('\nFatal Error:'), error.message);

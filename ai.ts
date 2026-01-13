@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GoogleAIFileManager, FileState } from '@google/generative-ai/server';
 import ora from 'ora';
 import chalk from 'chalk';
-import { CANDIDATE_MODELS, TRANSCRIPTION_PROMPT } from './config';
+import { CANDIDATE_MODELS, TRANSCRIPTION_PROMPT, REPORT_PROMPT, MODEL_COSTS } from './config';
 
 /**
  * Model name mapping for CLI convenience
@@ -13,11 +13,22 @@ const MODEL_MAP: Record<string, string> = {
   'flash-lite': 'models/gemini-2.0-flash-lite',
 };
 
+/**
+ * Cost tracking for API usage
+ */
+export interface CostEstimate {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCost: number;
+}
+
 export class GeminiClient {
   private genAI: GoogleGenerativeAI;
   private fileManager: GoogleAIFileManager;
   private preferredModel: string | null;
   private customInstructions: string | null;
+  private usageStats: CostEstimate[] = [];
 
   constructor(apiKey: string, preferredModel?: string, customInstructions?: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
@@ -25,6 +36,29 @@ export class GeminiClient {
     // Map short names to full model names
     this.preferredModel = preferredModel ? (MODEL_MAP[preferredModel] || preferredModel) : null;
     this.customInstructions = customInstructions || null;
+  }
+  
+  /**
+   * Get total cost estimate from all API calls
+   */
+  getCostEstimate(): { total: number; breakdown: CostEstimate[] } {
+    const total = this.usageStats.reduce((sum, stat) => sum + stat.estimatedCost, 0);
+    return { total, breakdown: this.usageStats };
+  }
+  
+  /**
+   * Track token usage and estimate cost
+   */
+  private trackUsage(model: string, inputTokens: number, outputTokens: number): void {
+    const costs = MODEL_COSTS[model] || { input: 0.50, output: 1.50 }; // Default fallback
+    const estimatedCost = (inputTokens * costs.input / 1_000_000) + (outputTokens * costs.output / 1_000_000);
+    
+    this.usageStats.push({
+      model,
+      inputTokens,
+      outputTokens,
+      estimatedCost
+    });
   }
 
   /**
@@ -94,6 +128,17 @@ export class GeminiClient {
         ]);
 
         const responseText = result.response.text();
+        
+        // Track token usage for cost estimation
+        const usageMetadata = result.response.usageMetadata;
+        if (usageMetadata) {
+          this.trackUsage(
+            modelName,
+            usageMetadata.promptTokenCount || 0,
+            usageMetadata.candidatesTokenCount || 0
+          );
+        }
+        
         spinner.succeed(chalk.green(`Success with ${modelName}`));
         return JSON.parse(responseText);
 
@@ -122,5 +167,50 @@ export class GeminiClient {
     }
 
     throw new Error("All models exhausted. Please try again later.");
+  }
+
+  /**
+   * Generates a meeting report from the transcript.
+   * Analyzes the transcript for key points, decisions, and action items.
+   */
+  async generateReport(transcript: any[]): Promise<any> {
+    const spinner = ora('Generating meeting report...').start();
+
+    // Convert transcript to text for the AI
+    const transcriptText = transcript.map((item: any) => 
+      `[${item.start}] ${item.speaker}: ${item.text}`
+    ).join('\n');
+
+    const prompt = `${REPORT_PROMPT}\n\nTRANSCRIPT:\n${transcriptText}`;
+
+    // Use faster model for report generation (it's just text analysis)
+    const modelName = this.preferredModel || 'models/gemini-2.5-flash';
+    
+    try {
+      const model = this.genAI.getGenerativeModel({ 
+        model: modelName,
+        generationConfig: { responseMimeType: "application/json" }
+      });
+
+      const result = await model.generateContent([{ text: prompt }]);
+      const responseText = result.response.text();
+      
+      // Track token usage
+      const usageMetadata = result.response.usageMetadata;
+      if (usageMetadata) {
+        this.trackUsage(
+          modelName,
+          usageMetadata.promptTokenCount || 0,
+          usageMetadata.candidatesTokenCount || 0
+        );
+      }
+      
+      spinner.succeed(chalk.green('Report generated successfully'));
+      return JSON.parse(responseText);
+      
+    } catch (error: any) {
+      spinner.fail(`Report generation failed: ${error.message}`);
+      throw error;
+    }
   }
 }
