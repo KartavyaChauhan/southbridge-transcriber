@@ -23,7 +23,6 @@ This document tracks all improvements made to Southbridge Transcriber after the 
 | **TXT format** | ❌ | ✅ `--format txt` |
 | **JSON format** | ❌ | ✅ `--format json` (with metadata) |
 
-**Commit:** `feat: add TXT and JSON output formats (meeting-diary parity)`
 
 ---
 
@@ -36,7 +35,6 @@ This document tracks all improvements made to Southbridge Transcriber after the 
 | **`-s` flag** | ❌ | ✅ Provide names upfront: `-s "John" "Barbara"` |
 | **`--no-interactive`** | ❌ | ✅ Skip speaker identification |
 
-**Commit:** `feat: add interactive speaker identification (meeting-diary parity)`
 
 ---
 
@@ -55,7 +53,6 @@ bunx sb-transcribe video.mp4 --model pro        # Best quality (default)
 bunx sb-transcribe video.mp4 --model flash-lite # Most economical
 ```
 
-**Commit:** `feat: add offmute features (--model, --instructions, --audio-chunk-minutes)`
 
 ---
 
@@ -125,7 +122,6 @@ _Source: videoplayback.mp4_
 [0:00] **Fei-Fei Li**: I think the whole history of deep learning is...
 ```
 
-**Commit:** `feat: improve MD format to match meeting-diary style (duration, header)`
 
 ---
 
@@ -152,8 +148,6 @@ bunx sb-transcribe video.mp4 --format md --report        # MD transcript + Repor
 
 **Output:** Creates `video_report.md` alongside the transcript.
 
-**Commit:** `feat: add report generation and cost estimation (ipgu parity)`
-
 ---
 
 ### 8. Cost Estimation (IPGU Parity)
@@ -179,8 +173,6 @@ bunx sb-transcribe video.mp4 --show-cost
   Total estimated cost: $0.1875
 ```
 
-**Commit:** `feat: add report generation and cost estimation (ipgu parity)`
-
 ---
 
 ### 9. Presets (IPGU Parity)
@@ -203,8 +195,6 @@ bunx sb-transcribe video.mp4 --preset fast      # Fast processing
 bunx sb-transcribe video.mp4 --preset quality   # Best quality
 bunx sb-transcribe video.mp4 --preset lite      # Most economical
 ```
-
-**Commit:** `feat: add report generation and cost estimation (ipgu parity)`
 
 ---
 
@@ -237,8 +227,6 @@ bunx sb-transcribe video.mp4 --format json
 # Force re-transcription (bypass cache)
 bunx sb-transcribe video.mp4 --force
 ```
-
-**Commit:** `feat: add smart caching to skip API calls on re-runs (meeting-diary parity)`
 
 ---
 
@@ -279,19 +267,7 @@ Options:
   -h, --help                            display help for command
 ```
 
----
 
-## Commits (Chronological)
-
-1. `feat: add TXT and JSON output formats (meeting-diary parity)`
-2. `fix: update format validation to include txt and json`
-3. `feat: improve MD format to match meeting-diary style (duration, header)`
-4. `feat: add interactive speaker identification (meeting-diary parity)`
-5. `feat: add offmute features (--model, --instructions, --audio-chunk-minutes)`
-6. `feat: add report generation, cost estimation, and presets (ipgu parity)`
-7. `feat: add smart caching to skip API calls on re-runs (meeting-diary parity)`
-
----
 
 ## How to Test
 
