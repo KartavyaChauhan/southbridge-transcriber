@@ -17,7 +17,7 @@ program
   .version('1.0.0')
   .argument('<file>', 'Path to the video or audio file')
   .option('-k, --key <key>', 'Google Gemini API Key')
-  .option('-f, --format <format>', 'Output format: srt, vtt, or md', 'srt')
+  .option('-f, --format <format>', 'Output format: srt, vtt, md, txt, or json', 'srt')
   .action((filePath, options) => {
     run(filePath, options);
   });

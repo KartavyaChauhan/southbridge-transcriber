@@ -11,11 +11,13 @@
 
 /**
  * Duration of audio chunks in minutes.
- * Longer = fewer API calls but higher risk of AI "drift" (losing context).
- * Shorter = more API calls but better timestamp accuracy.
- * Recommended: 15-20 minutes for optimal balance.
+ * For speaker consistency across long meetings, we now use a much larger window.
+ * Gemini 1.5 Pro supports up to 2 hours of audio in a single context.
+ * 
+ * Strategy: Process entire meeting as one chunk when possible.
+ * Only split if file exceeds this threshold.
  */
-export const CHUNK_DURATION_MINUTES = 20;
+export const CHUNK_DURATION_MINUTES = 120;
 export const CHUNK_DURATION_SECONDS = CHUNK_DURATION_MINUTES * 60;
 
 /**
@@ -40,14 +42,18 @@ export const SUPPORTED_FORMATS = [...SUPPORTED_VIDEO_FORMATS, ...SUPPORTED_AUDIO
  * Gemini models to try, in order of preference.
  * If a model hits quota (429), we automatically try the next one.
  * 
- * Note: Model names change frequently. Check Google's docs if errors occur.
- * Last updated: December 2025
+ * IMPORTANT: gemini-2.5-pro is prioritized for long-context speaker tracking.
+ * It handles 2+ hour audio files better than Flash models for diarization.
+ * 
+ * Available models verified via ListModels API (January 2026):
+ * - gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash, gemini-2.0-flash-lite
+ * - gemini-3-pro-preview, gemini-3-flash-preview (experimental)
  */
 export const CANDIDATE_MODELS = [
-  "models/gemini-2.5-flash",      // Fastest, try first
-  "models/gemini-2.0-flash",      // Fallback 1
-  "models/gemini-2.5-pro",        // More capable, slower
-  "models/gemini-2.0-flash-lite"  // Lightweight fallback
+  "models/gemini-2.5-pro",        // Best for long-context speaker tracking
+  "models/gemini-2.5-flash",      // Fast, good quality
+  "models/gemini-2.0-flash",      // Stable fallback
+  "models/gemini-2.0-flash-lite"  // Lightweight last resort
 ];
 
 /**

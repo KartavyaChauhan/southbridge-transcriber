@@ -9,7 +9,7 @@ interface TranscriptItem {
   text: string;
 }
 
-export type OutputFormat = 'srt' | 'vtt' | 'md';
+export type OutputFormat = 'srt' | 'vtt' | 'md' | 'txt' | 'json';
 
 /**
  * Converts "HH:MM:SS" to seconds.
@@ -147,6 +147,54 @@ export function generateMarkdown(transcript: TranscriptItem[], originalFilePath:
 }
 
 /**
+ * Generates simple TXT content (like meeting-diary).
+ * Format: [timestamp] Speaker: text
+ */
+export function generateTxt(transcript: TranscriptItem[]): string {
+  let txtContent = '';
+
+  transcript.forEach(item => {
+    const readableTime = secondsToReadableTime(timeToSeconds(item.start));
+    txtContent += `[${readableTime}] ${item.speaker}: ${item.text}\n`;
+  });
+
+  return txtContent;
+}
+
+/**
+ * Generates JSON content with detailed metadata (like meeting-diary).
+ */
+export function generateJson(transcript: TranscriptItem[], originalFilePath: string): string {
+  const fileName = path.basename(originalFilePath);
+  const processedDate = new Date().toISOString();
+  
+  // Extract unique speakers
+  const speakers = [...new Set(transcript.map(item => item.speaker))];
+  
+  // Calculate duration from last item
+  const lastItem = transcript[transcript.length - 1];
+  const durationSeconds = lastItem ? timeToSeconds(lastItem.start) + LAST_SUBTITLE_DURATION : 0;
+  
+  const output = {
+    metadata: {
+      file: fileName,
+      processedAt: processedDate,
+      durationSeconds,
+      speakerCount: speakers.length
+    },
+    speakers,
+    transcript: transcript.map(item => ({
+      speaker: item.speaker,
+      startTime: item.start,
+      startSeconds: timeToSeconds(item.start),
+      text: item.text
+    }))
+  };
+
+  return JSON.stringify(output, null, 2);
+}
+
+/**
  * Saves the transcript to the specified format next to the input video.
  */
 export function saveOutput(originalFilePath: string, transcript: TranscriptItem[], format: OutputFormat = 'srt') {
@@ -161,6 +209,12 @@ export function saveOutput(originalFilePath: string, transcript: TranscriptItem[
       break;
     case 'md':
       content = generateMarkdown(transcript, originalFilePath);
+      break;
+    case 'txt':
+      content = generateTxt(transcript);
+      break;
+    case 'json':
+      content = generateJson(transcript, originalFilePath);
       break;
     case 'srt':
     default:
