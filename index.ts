@@ -129,9 +129,10 @@ async function run(filePath: string, options: any) {
     }
 
     // 7. Output Result
+    const validFormats = ['srt', 'vtt', 'md', 'txt', 'json'];
     const outputFormat = (options.format || 'srt').toLowerCase() as OutputFormat;
-    if (!['srt', 'vtt', 'md'].includes(outputFormat)) {
-      console.error(chalk.red(`Error: Invalid format "${options.format}". Use srt, vtt, or md.`));
+    if (!validFormats.includes(outputFormat)) {
+      console.error(chalk.red(`Error: Invalid format "${options.format}". Use srt, vtt, md, txt, or json.`));
       process.exit(1);
     }
     
