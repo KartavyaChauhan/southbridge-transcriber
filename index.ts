@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
+import readline from 'readline';
 import { extractAudio } from './audio';
 import { GeminiClient } from './ai';
 import { splitAudio } from './splitter';
@@ -18,11 +19,71 @@ program
   .argument('<file>', 'Path to the video or audio file')
   .option('-k, --key <key>', 'Google Gemini API Key')
   .option('-f, --format <format>', 'Output format: srt, vtt, md, txt, or json', 'srt')
+  .option('-s, --speakers <names...>', 'Known speaker names (e.g., -s "John" "Barbara")')
+  .option('--no-interactive', 'Skip interactive speaker identification')
   .action((filePath, options) => {
     run(filePath, options);
   });
 
 program.parse();
+
+/**
+ * Prompt user for input (async readline wrapper)
+ */
+function prompt(question: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+/**
+ * Interactive speaker identification
+ * Shows sample text from each speaker and asks user to provide a name
+ */
+async function identifySpeakers(transcript: any[]): Promise<Record<string, string>> {
+  // Get unique speakers in order of appearance
+  const uniqueSpeakers: string[] = [];
+  transcript.forEach((item: any) => {
+    if (!uniqueSpeakers.includes(item.speaker)) {
+      uniqueSpeakers.push(item.speaker);
+    }
+  });
+
+  console.log(chalk.cyan.bold('\n--- Speaker Identification ---'));
+  console.log(chalk.gray('For each speaker, enter their name or press Enter to keep the default.\n'));
+
+  const speakerMap: Record<string, string> = {};
+
+  for (const speaker of uniqueSpeakers) {
+    // Find the first significant utterance from this speaker (at least 20 chars)
+    const sample = transcript.find(
+      (item: any) => item.speaker === speaker && item.text.length > 20
+    );
+    const sampleText = sample ? sample.text.substring(0, 100) : transcript.find((item: any) => item.speaker === speaker)?.text || '';
+    
+    console.log(chalk.yellow(`\n${speaker}:`));
+    console.log(chalk.white(`  "${sampleText}${sampleText.length >= 100 ? '...' : ''}"`));
+    
+    const answer = await prompt(chalk.cyan(`  Who is this speaker? [${speaker}]: `));
+    
+    if (answer) {
+      speakerMap[speaker] = answer;
+      console.log(chalk.green(`  ✓ ${speaker} → ${answer}`));
+    } else {
+      speakerMap[speaker] = speaker;
+      console.log(chalk.gray(`  (keeping as ${speaker})`));
+    }
+  }
+
+  return speakerMap;
+}
 
 // Helper to convert "MM:SS" string to Seconds (number)
 function parseTime(timeStr: string): number {
@@ -128,7 +189,39 @@ async function run(filePath: string, options: any) {
       fullTranscript = fullTranscript.concat(adjustedData);
     }
 
-    // 7. Output Result
+    // 7. Speaker Identification
+    let speakerMap: Record<string, string> = {};
+    
+    if (options.speakers && options.speakers.length > 0) {
+      // Use provided speaker names from -s flag
+      const uniqueSpeakers: string[] = [];
+      fullTranscript.forEach((item: any) => {
+        if (!uniqueSpeakers.includes(item.speaker)) {
+          uniqueSpeakers.push(item.speaker);
+        }
+      });
+      
+      uniqueSpeakers.forEach((speaker, index) => {
+        if (index < options.speakers.length) {
+          speakerMap[speaker] = options.speakers[index];
+        }
+      });
+      
+      console.log(chalk.cyan(`\nSpeaker names from -s flag: ${Object.entries(speakerMap).map(([k, v]) => `${k} → ${v}`).join(', ')}`));
+    } else if (options.interactive !== false) {
+      // Interactive speaker identification (default)
+      speakerMap = await identifySpeakers(fullTranscript);
+    }
+    
+    // Apply speaker name mapping
+    if (Object.keys(speakerMap).length > 0) {
+      fullTranscript = fullTranscript.map((item: any) => ({
+        ...item,
+        speaker: speakerMap[item.speaker] || item.speaker
+      }));
+    }
+
+    // 8. Output Result
     const validFormats = ['srt', 'vtt', 'md', 'txt', 'json'];
     const outputFormat = (options.format || 'srt').toLowerCase() as OutputFormat;
     if (!validFormats.includes(outputFormat)) {
