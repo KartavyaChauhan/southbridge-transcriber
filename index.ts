@@ -12,6 +12,13 @@ import { extractVideoScreenshots, isVideoFile } from './screenshot';
 import { saveOutput, saveReport, type OutputFormat, type MeetingReport } from './formatting';
 import { SUPPORTED_FORMATS, PRESETS, CHUNK_OVERLAP_SECONDS, DESCRIPTION_SAMPLE_MINUTES } from './config';
 import { TRANSCRIPTION_PROMPT, DESCRIPTION_PROMPT, AUDIO_DESCRIPTION_PROMPT, MERGE_DESCRIPTION_PROMPT } from './prompts';
+import { 
+  validateTranscript, 
+  logValidationResult, 
+  buildSpeakerNormalizationMap, 
+  normalizeTranscriptSpeakers,
+  type ValidationConfig 
+} from './validator';
 
 // Interface for tracking transcription progress (like offmute)
 interface TranscriptionProgressEntry {
@@ -20,6 +27,12 @@ interface TranscriptionProgressEntry {
   prompt: string;
   response: string;
   error?: string;
+  validationResult?: {
+    isValid: boolean;
+    coverage: number;
+    issues: string[];
+  };
+  attempt: number;
 }
 
 const program = new Command();
@@ -42,6 +55,8 @@ program
   .option('--force', 'Force re-transcription, ignoring cached results')
   .option('--no-interactive', 'Skip interactive speaker identification')
   .option('--save-intermediates', 'Save intermediate processing files')
+  .option('--validation-retries <number>', 'Number of retries if timing validation fails', '2')
+  .option('--no-timing-check', 'Disable timing validation (faster but may have gaps)')
   .action((filePath, options) => {
     run(filePath, options);
   });
@@ -400,69 +415,152 @@ async function run(filePath: string, options: any) {
     let fullTranscript: any[] = [];
     const transcriptionProgress: TranscriptionProgressEntry[] = [];
     const progressPath = path.join(transcriptionDir, 'transcription_progress.json');
+    
+    // Track known speakers for consistency across chunks
+    let knownSpeakers: string[] = [];
+    const validationRetries = parseInt(options.validationRetries) || 2;
+    const enableTimingCheck = options.timingCheck !== false;
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]!;
-      console.log(chalk.yellow(`\nProcessing chunk ${i + 1}/${chunks.length}`));
+      const expectedDuration = chunk.endTime - chunk.startTime;
+      console.log(chalk.yellow(`\nProcessing chunk ${i + 1}/${chunks.length} (${Math.round(expectedDuration)}s expected)`));
       
       const cachePath = path.join(transcriptionDir, `chunk_${i}_raw.json`);
-      let chunkData: any[];
+      let chunkData: any[] = [];
+      let validationPassed = false;
       
       // Check cache
       if (!options.force && fs.existsSync(cachePath)) {
         console.log(chalk.green(`  ✓ Found cached transcription`));
         try {
           chunkData = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+          validationPassed = true; // Assume cached data was already validated
         } catch (e) {
           chunkData = [];
         }
       } else {
-        // Build prompt with context
-        const prompt = TRANSCRIPTION_PROMPT(
-          finalDescription,
-          i + 1,
-          chunks.length,
-          previousTranscription,
-          options.instructions
-        );
-        
-        const progressEntry: TranscriptionProgressEntry = {
-          timestamp: Date.now(),
-          chunkIndex: i,
-          prompt: prompt,
-          response: '',
-          error: undefined
-        };
-        
-        try {
-          const fileUri = await client.uploadMedia(chunk.path);
-          chunkData = await client.transcribeWithContext(fileUri, prompt);
-          fs.writeFileSync(cachePath, JSON.stringify(chunkData, null, 2));
+        // Transcribe with validation and retry logic
+        for (let attempt = 0; attempt <= validationRetries; attempt++) {
+          // Build prompt with context (add timing hint on retries)
+          let timingHint = '';
+          if (attempt > 0) {
+            timingHint = `\n\nIMPORTANT: This chunk is ${Math.round(expectedDuration)} seconds long. Please ensure your transcription covers the entire duration with accurate timestamps from 00:00 to approximately ${formatTime(expectedDuration)}.`;
+          }
           
-          // Record success in progress
-          progressEntry.response = JSON.stringify(chunkData);
-        } catch (error: any) {
-          console.error(chalk.red(`  Error transcribing chunk ${i + 1}: ${error.message}`));
-          chunkTranscriptions.push(`\n[Transcription error for chunk ${i + 1}]\n`);
-          
-          // Record error in progress
-          progressEntry.error = `Gemini API Error: ${error.message}`;
-          transcriptionProgress.push(progressEntry);
-          fs.writeFileSync(progressPath, JSON.stringify(transcriptionProgress, null, 2));
-          
-          // Update file with error
-          updateTranscriptionFile(
-            transcriptionPath,
-            transcriptionContent + `\n[Transcription error for chunk ${i + 1}]\n`,
+          const prompt = TRANSCRIPTION_PROMPT(
+            finalDescription,
             i + 1,
-            chunks.length
-          );
-          continue;
+            chunks.length,
+            previousTranscription,
+            options.instructions
+          ) + timingHint;
+          
+          const progressEntry: TranscriptionProgressEntry = {
+            timestamp: Date.now(),
+            chunkIndex: i,
+            prompt: prompt,
+            response: '',
+            error: undefined,
+            attempt: attempt + 1
+          };
+          
+          try {
+            if (attempt > 0) {
+              console.log(chalk.yellow(`  ↻ Retry ${attempt}/${validationRetries} for better timing coverage...`));
+            }
+            
+            const fileUri = await client.uploadMedia(chunk.path);
+            chunkData = await client.transcribeWithContext(fileUri, prompt);
+            
+            // Validate the transcription if timing check is enabled
+            if (enableTimingCheck && chunkData.length > 0) {
+              const validationConfig: ValidationConfig = {
+                expectedDuration: expectedDuration,
+                minCoveragePercent: 60, // Be lenient - 60% coverage is acceptable
+                maxGapSeconds: 120,
+                knownSpeakers: knownSpeakers.length > 0 ? knownSpeakers : undefined,
+                strictTiming: false
+              };
+              
+              const validationResult = validateTranscript(chunkData, validationConfig);
+              logValidationResult(validationResult, i);
+              
+              // Record validation in progress
+              progressEntry.validationResult = {
+                isValid: validationResult.isValid,
+                coverage: validationResult.stats.coverage,
+                issues: validationResult.issues.map(iss => iss.message)
+              };
+              
+              if (validationResult.isValid) {
+                validationPassed = true;
+                
+                // Normalize speakers if inconsistencies detected
+                if (validationResult.issues.some(iss => iss.type === 'speaker_inconsistency')) {
+                  const speakerMap = buildSpeakerNormalizationMap(
+                    validationResult.stats.speakers,
+                    knownSpeakers
+                  );
+                  if (Object.keys(speakerMap).length > 0) {
+                    console.log(chalk.cyan(`  → Normalizing speakers: ${Object.entries(speakerMap).map(([k, v]) => `${k}→${v}`).join(', ')}`));
+                    chunkData = normalizeTranscriptSpeakers(chunkData, speakerMap);
+                  }
+                }
+                
+                // Update known speakers
+                const newSpeakers = validationResult.stats.speakers.filter(s => !knownSpeakers.includes(s));
+                knownSpeakers = [...knownSpeakers, ...newSpeakers];
+              } else if (attempt < validationRetries) {
+                // Validation failed, will retry
+                progressEntry.error = `Validation failed: ${validationResult.issues.map(i => i.message).join('; ')}`;
+                transcriptionProgress.push(progressEntry);
+                fs.writeFileSync(progressPath, JSON.stringify(transcriptionProgress, null, 2));
+                continue; // Retry
+              } else {
+                // Last attempt failed validation, use it anyway with warning
+                console.log(chalk.yellow(`  ⚠ Using transcript despite validation issues (all retries exhausted)`));
+                validationPassed = true;
+                
+                // Still update known speakers
+                knownSpeakers = [...new Set([...knownSpeakers, ...validationResult.stats.speakers])];
+              }
+            } else {
+              validationPassed = true;
+              // Track speakers even without validation
+              const speakers = [...new Set(chunkData.map((item: any) => item.speaker))];
+              knownSpeakers = [...new Set([...knownSpeakers, ...speakers])];
+            }
+            
+            // Save successful transcription
+            fs.writeFileSync(cachePath, JSON.stringify(chunkData, null, 2));
+            progressEntry.response = JSON.stringify(chunkData);
+            transcriptionProgress.push(progressEntry);
+            fs.writeFileSync(progressPath, JSON.stringify(transcriptionProgress, null, 2));
+            break; // Success, exit retry loop
+            
+          } catch (error: any) {
+            console.error(chalk.red(`  Error transcribing chunk ${i + 1}: ${error.message}`));
+            progressEntry.error = `Gemini API Error: ${error.message}`;
+            transcriptionProgress.push(progressEntry);
+            fs.writeFileSync(progressPath, JSON.stringify(transcriptionProgress, null, 2));
+            
+            if (attempt === validationRetries) {
+              // All retries exhausted
+              chunkTranscriptions.push(`\n[Transcription error for chunk ${i + 1}]\n`);
+              updateTranscriptionFile(
+                transcriptionPath,
+                transcriptionContent + `\n[Transcription error for chunk ${i + 1}]\n`,
+                i + 1,
+                chunks.length
+              );
+            }
+          }
         }
         
-        // Save progress after successful transcription
-        transcriptionProgress.push(progressEntry);
-        fs.writeFileSync(progressPath, JSON.stringify(transcriptionProgress, null, 2));
+        if (!validationPassed && chunkData.length === 0) {
+          continue; // Skip to next chunk if all retries failed
+        }
       }
 
       // Adjust timestamps based on chunk start time
