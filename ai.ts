@@ -2,7 +2,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GoogleAIFileManager, FileState } from '@google/generative-ai/server';
 import ora from 'ora';
 import chalk from 'chalk';
-import { CANDIDATE_MODELS, TRANSCRIPTION_PROMPT, REPORT_PROMPT, MODEL_COSTS } from './config';
+import fs from 'fs';
+import path from 'path';
+import { CANDIDATE_MODELS, MODEL_COSTS } from './config';
+import { SIMPLE_TRANSCRIPTION_PROMPT, REPORT_PROMPT } from './prompts';
 
 /**
  * Model name mapping for CLI convenience
@@ -103,7 +106,7 @@ export class GeminiClient {
     const spinner = ora('Transcribing with Gemini...').start();
 
     // Build the prompt with optional custom instructions
-    let prompt = TRANSCRIPTION_PROMPT;
+    let prompt = SIMPLE_TRANSCRIPTION_PROMPT;
     if (this.customInstructions) {
       prompt += `\n\nADDITIONAL INSTRUCTIONS:\n${this.customInstructions}`;
     }
@@ -212,5 +215,214 @@ export class GeminiClient {
       spinner.fail(`Report generation failed: ${error.message}`);
       throw error;
     }
+  }
+
+  // ===========================================
+  // NEW: MULTIMODAL ANALYSIS METHODS
+  // ===========================================
+
+  /**
+   * Analyzes images (screenshots) to understand visual context.
+   * Used in the description phase to identify participants, settings, etc.
+   */
+  async analyzeImages(imagePaths: string[], prompt: string): Promise<string> {
+    const spinner = ora('Analyzing visual content...').start();
+
+    try {
+      // Read images and convert to base64
+      const imageParts = imagePaths.map(imagePath => {
+        const imageData = fs.readFileSync(imagePath);
+        const base64 = imageData.toString('base64');
+        const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+        
+        return {
+          inlineData: {
+            data: base64,
+            mimeType,
+          }
+        };
+      });
+
+      const modelName = this.preferredModel || 'models/gemini-2.5-flash';
+      const model = this.genAI.getGenerativeModel({ model: modelName });
+
+      const result = await model.generateContent([
+        ...imageParts,
+        { text: prompt }
+      ]);
+
+      const responseText = result.response.text();
+      
+      // Track usage
+      const usageMetadata = result.response.usageMetadata;
+      if (usageMetadata) {
+        this.trackUsage(
+          modelName,
+          usageMetadata.promptTokenCount || 0,
+          usageMetadata.candidatesTokenCount || 0
+        );
+      }
+
+      spinner.succeed(chalk.green('Visual analysis complete'));
+      return responseText;
+
+    } catch (error: any) {
+      spinner.fail(`Image analysis failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyzes audio sample to understand content and speakers.
+   * Used in the description phase before full transcription.
+   */
+  async analyzeAudio(audioPath: string, prompt: string): Promise<string> {
+    const spinner = ora('Analyzing audio content...').start();
+
+    try {
+      // Upload audio file
+      const fileUri = await this.uploadMedia(audioPath);
+      
+      const modelName = this.preferredModel || 'models/gemini-2.5-flash';
+      const model = this.genAI.getGenerativeModel({ model: modelName });
+
+      const result = await model.generateContent([
+        { fileData: { mimeType: 'audio/mp3', fileUri } },
+        { text: prompt }
+      ]);
+
+      const responseText = result.response.text();
+      
+      // Track usage
+      const usageMetadata = result.response.usageMetadata;
+      if (usageMetadata) {
+        this.trackUsage(
+          modelName,
+          usageMetadata.promptTokenCount || 0,
+          usageMetadata.candidatesTokenCount || 0
+        );
+      }
+
+      spinner.succeed(chalk.green('Audio analysis complete'));
+      return responseText;
+
+    } catch (error: any) {
+      spinner.fail(`Audio analysis failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Merges visual and audio descriptions into a unified description.
+   */
+  async mergeDescriptions(
+    imageDescription: string,
+    audioDescription: string,
+    prompt: string
+  ): Promise<string> {
+    const spinner = ora('Merging visual and audio descriptions...').start();
+
+    const fullPrompt = `${prompt}
+
+## Visual Description (from screenshots):
+${imageDescription}
+
+## Audio Description (from audio sample):
+${audioDescription}
+
+Please provide a unified description that combines both perspectives.`;
+
+    try {
+      const modelName = this.preferredModel || 'models/gemini-2.5-flash';
+      const model = this.genAI.getGenerativeModel({ model: modelName });
+
+      const result = await model.generateContent([{ text: fullPrompt }]);
+      const responseText = result.response.text();
+      
+      // Track usage
+      const usageMetadata = result.response.usageMetadata;
+      if (usageMetadata) {
+        this.trackUsage(
+          modelName,
+          usageMetadata.promptTokenCount || 0,
+          usageMetadata.candidatesTokenCount || 0
+        );
+      }
+
+      spinner.succeed(chalk.green('Description merge complete'));
+      return responseText;
+
+    } catch (error: any) {
+      spinner.fail(`Description merge failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Transcribes audio with context from the description phase.
+   * This is the enhanced transcription that uses meeting context.
+   */
+  async transcribeWithContext(
+    fileUri: string,
+    prompt: string
+  ): Promise<any> {
+    const spinner = ora('Transcribing with context...').start();
+
+    // Build model list: preferred model first, then fallbacks
+    const modelsToTry = this.preferredModel 
+      ? [this.preferredModel, ...CANDIDATE_MODELS.filter(m => m !== this.preferredModel)]
+      : CANDIDATE_MODELS;
+
+    for (const modelName of modelsToTry) {
+      spinner.text = `Trying model: ${modelName}...`;
+      
+      try {
+        const model = this.genAI.getGenerativeModel({ 
+          model: modelName,
+          generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const result = await model.generateContent([
+          { fileData: { mimeType: "audio/mp3", fileUri } },
+          { text: prompt }
+        ]);
+
+        const responseText = result.response.text();
+        
+        // Track token usage
+        const usageMetadata = result.response.usageMetadata;
+        if (usageMetadata) {
+          this.trackUsage(
+            modelName,
+            usageMetadata.promptTokenCount || 0,
+            usageMetadata.candidatesTokenCount || 0
+          );
+        }
+        
+        spinner.succeed(chalk.green(`Transcribed with ${modelName}`));
+        return JSON.parse(responseText);
+
+      } catch (error: any) {
+        const errorMsg = error.message?.toLowerCase() || '';
+        const isQuotaError = 
+          errorMsg.includes('429') || 
+          errorMsg.includes('503') ||
+          errorMsg.includes('quota') ||
+          errorMsg.includes('rate limit') ||
+          errorMsg.includes('resource_exhausted') ||
+          errorMsg.includes('overloaded');
+        
+        if (isQuotaError) {
+          spinner.warn(chalk.yellow(`Quota hit on ${modelName}. Switching...`));
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        } else {
+          spinner.fail(`Error on ${modelName}: ${error.message}`);
+          throw error;
+        }
+      }
+    }
+
+    throw new Error("All models exhausted. Please try again later.");
   }
 }

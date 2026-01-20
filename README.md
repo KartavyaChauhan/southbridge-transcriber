@@ -375,34 +375,5 @@ This meeting focused on Q1 deliverables...
 | Bob | Review specs | Jan 25 |
 ```
 
----
 
-## 🤝 Comparison with Reference Projects
 
-| Feature | Offmute | Meeting-Diary | IPGU | **This Tool** |
-|---------|---------|---------------|------|---------------|
-| SRT format | ✅ | ✅ | ✅ | ✅ |
-| VTT format | ❌ | ❌ | ❌ | ✅ |
-| Markdown | ✅ | ✅ | ❌ | ✅ |
-| TXT format | ❌ | ✅ | ❌ | ✅ |
-| JSON format | ❌ | ✅ | ❌ | ✅ |
-| Interactive speaker ID | ❌ | ✅ | ❌ | ✅ |
-| Auto speaker naming | ✅ | ❌ | ❌ | ✅ |
-| Model selection | ✅ | ❌ | ✅ | ✅ |
-| Custom instructions | ✅ | ❌ | ❌ | ✅ |
-| Report generation | ✅ | ❌ | ❌ | ✅ |
-| Cost estimation | ❌ | ❌ | ✅ | ✅ |
-| Presets | ❌ | ❌ | ✅ | ✅ |
-| Smart caching | ❌ | ✅ | ❌ | ✅ |
-
----
-
-## 📝 License
-
-MIT
-
----
-
-## 👤 Author
-
-Built for the Southbridge AI Engineering take-home assignment.
