@@ -224,96 +224,149 @@ export class GeminiClient {
   /**
    * Analyzes images (screenshots) to understand visual context.
    * Used in the description phase to identify participants, settings, etc.
+   * Includes fallback logic for quota errors.
    */
   async analyzeImages(imagePaths: string[], prompt: string): Promise<string> {
     const spinner = ora('Analyzing visual content...').start();
 
-    try {
-      // Read images and convert to base64
-      const imageParts = imagePaths.map(imagePath => {
-        const imageData = fs.readFileSync(imagePath);
-        const base64 = imageData.toString('base64');
-        const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
-        
-        return {
-          inlineData: {
-            data: base64,
-            mimeType,
-          }
-        };
-      });
-
-      const modelName = this.preferredModel || 'models/gemini-2.5-flash';
-      const model = this.genAI.getGenerativeModel({ model: modelName });
-
-      const result = await model.generateContent([
-        ...imageParts,
-        { text: prompt }
-      ]);
-
-      const responseText = result.response.text();
+    // Read images and convert to base64
+    const imageParts = imagePaths.map(imagePath => {
+      const imageData = fs.readFileSync(imagePath);
+      const base64 = imageData.toString('base64');
+      const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
       
-      // Track usage
-      const usageMetadata = result.response.usageMetadata;
-      if (usageMetadata) {
-        this.trackUsage(
-          modelName,
-          usageMetadata.promptTokenCount || 0,
-          usageMetadata.candidatesTokenCount || 0
-        );
+      return {
+        inlineData: {
+          data: base64,
+          mimeType,
+        }
+      };
+    });
+
+    // Build model list with fallbacks
+    const modelsToTry = this.preferredModel 
+      ? [this.preferredModel, ...CANDIDATE_MODELS.filter(m => m !== this.preferredModel)]
+      : CANDIDATE_MODELS;
+
+    for (const modelName of modelsToTry) {
+      spinner.text = `Analyzing visuals with ${modelName}...`;
+      
+      try {
+        const model = this.genAI.getGenerativeModel({ model: modelName });
+
+        const result = await model.generateContent([
+          ...imageParts,
+          { text: prompt }
+        ]);
+
+        const responseText = result.response.text();
+        
+        // Track usage
+        const usageMetadata = result.response.usageMetadata;
+        if (usageMetadata) {
+          this.trackUsage(
+            modelName,
+            usageMetadata.promptTokenCount || 0,
+            usageMetadata.candidatesTokenCount || 0
+          );
+        }
+
+        spinner.succeed(chalk.green(`Visual analysis complete (${modelName})`));
+        return responseText;
+
+      } catch (error: any) {
+        const errorMsg = error.message?.toLowerCase() || '';
+        const isQuotaError = 
+          errorMsg.includes('429') || 
+          errorMsg.includes('503') ||
+          errorMsg.includes('quota') ||
+          errorMsg.includes('rate limit') ||
+          errorMsg.includes('resource_exhausted') ||
+          errorMsg.includes('overloaded');
+        
+        if (isQuotaError) {
+          spinner.warn(chalk.yellow(`Quota hit on ${modelName}. Switching...`));
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        } else {
+          spinner.fail(`Image analysis failed: ${error.message}`);
+          throw error;
+        }
       }
-
-      spinner.succeed(chalk.green('Visual analysis complete'));
-      return responseText;
-
-    } catch (error: any) {
-      spinner.fail(`Image analysis failed: ${error.message}`);
-      throw error;
     }
+
+    throw new Error("All models exhausted for image analysis. Please try again later.");
   }
 
   /**
    * Analyzes audio sample to understand content and speakers.
    * Used in the description phase before full transcription.
+   * Includes fallback logic for quota errors.
    */
   async analyzeAudio(audioPath: string, prompt: string): Promise<string> {
     const spinner = ora('Analyzing audio content...').start();
 
-    try {
-      // Upload audio file
-      const fileUri = await this.uploadMedia(audioPath);
-      
-      const modelName = this.preferredModel || 'models/gemini-2.5-flash';
-      const model = this.genAI.getGenerativeModel({ model: modelName });
+    // Upload audio file first (this is shared across all model attempts)
+    const fileUri = await this.uploadMedia(audioPath);
 
-      const result = await model.generateContent([
-        { fileData: { mimeType: 'audio/mp3', fileUri } },
-        { text: prompt }
-      ]);
+    // Build model list with fallbacks
+    const modelsToTry = this.preferredModel 
+      ? [this.preferredModel, ...CANDIDATE_MODELS.filter(m => m !== this.preferredModel)]
+      : CANDIDATE_MODELS;
 
-      const responseText = result.response.text();
+    for (const modelName of modelsToTry) {
+      spinner.text = `Analyzing audio with ${modelName}...`;
       
-      // Track usage
-      const usageMetadata = result.response.usageMetadata;
-      if (usageMetadata) {
-        this.trackUsage(
-          modelName,
-          usageMetadata.promptTokenCount || 0,
-          usageMetadata.candidatesTokenCount || 0
-        );
+      try {
+        const model = this.genAI.getGenerativeModel({ model: modelName });
+
+        const result = await model.generateContent([
+          { fileData: { mimeType: 'audio/mp3', fileUri } },
+          { text: prompt }
+        ]);
+
+        const responseText = result.response.text();
+        
+        // Track usage
+        const usageMetadata = result.response.usageMetadata;
+        if (usageMetadata) {
+          this.trackUsage(
+            modelName,
+            usageMetadata.promptTokenCount || 0,
+            usageMetadata.candidatesTokenCount || 0
+          );
+        }
+
+        spinner.succeed(chalk.green(`Audio analysis complete (${modelName})`));
+        return responseText;
+
+      } catch (error: any) {
+        const errorMsg = error.message?.toLowerCase() || '';
+        const isQuotaError = 
+          errorMsg.includes('429') || 
+          errorMsg.includes('503') ||
+          errorMsg.includes('quota') ||
+          errorMsg.includes('rate limit') ||
+          errorMsg.includes('resource_exhausted') ||
+          errorMsg.includes('overloaded');
+        
+        if (isQuotaError) {
+          spinner.warn(chalk.yellow(`Quota hit on ${modelName}. Switching...`));
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        } else {
+          spinner.fail(`Audio analysis failed: ${error.message}`);
+          throw error;
+        }
       }
-
-      spinner.succeed(chalk.green('Audio analysis complete'));
-      return responseText;
-
-    } catch (error: any) {
-      spinner.fail(`Audio analysis failed: ${error.message}`);
-      throw error;
     }
+
+    throw new Error("All models exhausted for audio analysis. Please try again later.");
   }
 
   /**
    * Merges visual and audio descriptions into a unified description.
+   * Includes fallback logic for quota errors.
    */
   async mergeDescriptions(
     imageDescription: string,
@@ -332,30 +385,55 @@ ${audioDescription}
 
 Please provide a unified description that combines both perspectives.`;
 
-    try {
-      const modelName = this.preferredModel || 'models/gemini-2.5-flash';
-      const model = this.genAI.getGenerativeModel({ model: modelName });
+    // Build model list with fallbacks
+    const modelsToTry = this.preferredModel 
+      ? [this.preferredModel, ...CANDIDATE_MODELS.filter(m => m !== this.preferredModel)]
+      : CANDIDATE_MODELS;
 
-      const result = await model.generateContent([{ text: fullPrompt }]);
-      const responseText = result.response.text();
+    for (const modelName of modelsToTry) {
+      spinner.text = `Merging descriptions with ${modelName}...`;
       
-      // Track usage
-      const usageMetadata = result.response.usageMetadata;
-      if (usageMetadata) {
-        this.trackUsage(
-          modelName,
-          usageMetadata.promptTokenCount || 0,
-          usageMetadata.candidatesTokenCount || 0
-        );
+      try {
+        const model = this.genAI.getGenerativeModel({ model: modelName });
+
+        const result = await model.generateContent([{ text: fullPrompt }]);
+        const responseText = result.response.text();
+        
+        // Track usage
+        const usageMetadata = result.response.usageMetadata;
+        if (usageMetadata) {
+          this.trackUsage(
+            modelName,
+            usageMetadata.promptTokenCount || 0,
+            usageMetadata.candidatesTokenCount || 0
+          );
+        }
+
+        spinner.succeed(chalk.green(`Description merge complete (${modelName})`));
+        return responseText;
+
+      } catch (error: any) {
+        const errorMsg = error.message?.toLowerCase() || '';
+        const isQuotaError = 
+          errorMsg.includes('429') || 
+          errorMsg.includes('503') ||
+          errorMsg.includes('quota') ||
+          errorMsg.includes('rate limit') ||
+          errorMsg.includes('resource_exhausted') ||
+          errorMsg.includes('overloaded');
+        
+        if (isQuotaError) {
+          spinner.warn(chalk.yellow(`Quota hit on ${modelName}. Switching...`));
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        } else {
+          spinner.fail(`Description merge failed: ${error.message}`);
+          throw error;
+        }
       }
-
-      spinner.succeed(chalk.green('Description merge complete'));
-      return responseText;
-
-    } catch (error: any) {
-      spinner.fail(`Description merge failed: ${error.message}`);
-      throw error;
     }
+
+    throw new Error("All models exhausted for description merge. Please try again later.");
   }
 
   /**
