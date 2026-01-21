@@ -8,6 +8,10 @@ A robust, multimodal AI transcription and diarization tool built for the Southbr
 
 | Feature | Description |
 |---------|-------------|
+| **Multimodal Analysis** | Uses **Video Screenshots + Audio** for accurate speaker ID & context |
+| **Sequential Processing** | 10-min chunks with **context chaining** (no more lost context) |
+| **IPGU-Style Validation** | Auto-retries on bad timestamps, gaps, or hallucinations |
+| **Speaker Normalization** | Automatically fixes "Speaker 1" → "John" across chunks |
 | **5 Output Formats** | SRT, VTT, Markdown, TXT, JSON |
 | **Interactive Speaker ID** | Tool pauses to let you name each speaker |
 | **Smart Caching** | Re-runs are instant (skips API calls) |
@@ -24,10 +28,18 @@ See [CHANGES.md](./CHANGES.md) for full details.
 ## 🚀 Features
 
 ### Core Transcription
-- **Multimodal Intelligence:** Uses **Google Gemini 2.5** models to "hear" audio directly
-- **Speaker Diarization:** Automatically identifies and labels distinct speakers
-- **Auto Speaker Naming:** AI detects actual names when spoken in the audio
-- **120-Minute Context:** Processes up to 2 hours without splitting (better consistency)
+* **Multimodal Intelligence:** Extracts video frames to identify speakers visually (e.g., "The speaker on screen is John") and captures non-verbal cues.
+* **Context-Aware Chunks:** Passes the last 20 lines of the previous chunk to the next, ensuring seamless conversation flow and consistent speaker names.
+* **Robust Validation:** Automatically detects and retries failed chunks (e.g., empty outputs, timing mismatches) using an `ipgu`-style validator.
+* **Graceful Degradation:** If `Gemini Pro` hits rate limits, automatically falls back to `Flash` without crashing the pipeline.
+* 
+## 🛡️ Validation & Reliability
+To ensure production-grade reliability (matching `ipgu` standards), the tool includes a strict validation pipeline:
+
+* **Coverage Check:** Rejects chunks where the transcript covers less than 50% of the audio duration.
+* **Timing Sanity:** Detects and fixes "time travel" timestamps or massive gaps.
+* **Speaker Consistency:** Tracks known speakers across chunks. If Chunk 3 suddenly reverts to "Speaker 1", the validator detects it and re-maps it to the correct name based on previous chunks.
+* **Automatic Retries:** If validation fails, the system automatically retries with a stricter system prompt before giving up.
 
 ### Output Formats
 | Format | Flag | Description |
@@ -242,40 +254,32 @@ southbridge-transcriber/
 
 ```
 ┌─────────────────┐
-│   Input File    │  video.mp4 or audio.mp3
+│    Input File   │
+└────────┬────────┘
+         ▼
+┌─────────────────┐      ┌───────────────────┐
+│  Media Engine   │ ────►│ Extract Screenshots│ (Multimodal Context)
+│  (FFmpeg)       │ ────►│ Split Audio (10m)  │ (Overlapping Chunks)
+└────────┬────────┘      └───────────────────┘
+         ▼
+┌─────────────────┐
+│  Loop: Chunk N  │◄──── "Previous Context" (Last 20 lines)
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│ Audio Extraction│  FFmpeg → .mp3
+│   Gemini API    │ ◄─── Prompt: "Use Audio + Screenshots + Context"
 └────────┬────────┘
          ▼
 ┌─────────────────┐
-│  Check Cache    │  .southbridge_intermediates/
-│  (if exists)    │  → Skip API call!
+│   VALIDATOR     │ ◄─── Checks: Coverage > 80%? Gaps? Speaker consistency?
 └────────┬────────┘
+         │
+    [Fail] ────► Retry (Add "Timing Hint" to prompt)
+         │
+    [Pass] ────► Normalize Speakers ("Speaker 1" -> "Fei-Fei")
          ▼
 ┌─────────────────┐
-│   Split Audio   │  If > 120 mins → chunks
-│  (if needed)    │  Otherwise → single chunk
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│  Gemini API     │  Upload audio → Transcribe
-│  (with retry)   │  Pro → Flash fallback on quota
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ Speaker ID      │  Interactive or -s flag
-│  (optional)     │  
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ Generate Output │  SRT/VTT/MD/TXT/JSON
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ Generate Report │  (if --report)
-│  (optional)     │  Summary, Key Points, Actions
+│  Final Output   │
 └─────────────────┘
 ```
 
