@@ -185,70 +185,99 @@ Observation (Running offmute)
 
 Before implementing changes, I ran the offmute CLI on the same reference video to observe its actual behavior and outputs.
 Key observations:
+
 •	The video is split into ~10-minute audio chunks for transcription (6 chunks for a ~60-minute video).
 •	In addition to transcription chunks, offmute generates a separate ~20-minute audio sample used for an initial description/context phase.
 •	Screenshots are extracted from the video and stored alongside audio intermediates.
 •	Transcription output updates incrementally during processing (e.g., progress indicators like 6/7 (87%)), then resolves to a clean final document.
+
 •	The intermediate directory structure clearly separates:
+
 o	screenshots
 o	audio chunks
 o	per-chunk transcriptions
 o	final reports
+
 This indicates that offmute does not treat transcription as a single step, but as a multi-stage pipeline where visual context and high-level understanding precede detailed transcription.
 Interpretation
+
 The presence of a dedicated description phase and screenshots shows that offmute uses true multimodal context:
+
 •	Visual information (who is visible, screen sharing, reactions)
 •	Audio information
 •	Meeting-level understanding before diarization
+
 My original implementation discarded video entirely, which explains weaker speaker consistency and loss of contextual cues.
 Decision
+
 To address this gap, I prioritized implementing:
+
 1.	Screenshot extraction from video
 2.	A description phase that consumes both screenshots and audio
 3.	Updated prompts that explicitly instruct the model to use visual cues (visibility, screen content, reactions) for diarization and tone
+
 This was intentionally tackled before any other improvements, as it was the most fundamental issue identified in the review.
 
 **Workflow Parity & Output Structure**
 
-Observation (Current Implementation Gaps)
+Observation (Current Implementation Gaps
+
 After implementing multimodal support, I tested the current pipeline on videoplayback.mp4 and compared the outputs against offmute.
 Key issues observed:
+
 •	The import error Cannot find module './prompts' surfaced during early iterations, indicating missing or incorrectly wired prompt definitions.
 •	Although the tool ran, no live-updating _transcription.md file was generated.
 •	The output lacked the structured sections produced by offmute (File Metadata, Description, Audio Analysis, Visual Analysis, Full Transcription).
 •	Video chunk artifacts (per-chunk audio/video intermediates) were not being persisted to disk, making inspection and debugging difficult.
 •	Transcription errors surfaced as placeholders per chunk, but without a consolidated, user-visible transcription file.
+
 In contrast, offmute produces:
+
 •	A live-updating Markdown transcript during processing
+
 •	A clearly defined intermediate directory structure:
+
 o	audio/
 o	screenshots/
 o	transcription/
+
 •	A description phase that precedes transcription and informs diarization and tone
 •	Incremental progress visibility that resolves to a clean final document
+
 Interpretation
+
 These gaps indicated that my pipeline, while functionally producing transcripts, did not match offmute’s workflow model.
 Specifically:
+
 •	Transcription was treated as a batch operation rather than a staged, observable process.
 •	Outputs were generated at the end instead of evolving during execution.
 •	The absence of a description-first phase limited context reuse across chunks.
+
 This explained why the results felt less robust despite similar model usage.
 Decision
+
 To close this gap, I restructured the pipeline to more closely mirror offmute’s execution model:
+
 •	Centralized and fixed prompt imports (prompts.ts) to remove module resolution errors.
 •	Introduced a description phase that runs before transcription and persists its output.
+
 •	Rewrote the main pipeline (index.ts) to:
+
 o	Create a dedicated .southbridge_<filename>/ workspace
 o	Persist audio/, screenshots/, and transcription/ subdirectories
 o	Generate a live-updating _transcription.md file with metadata and section headers
 o	Append transcription results incrementally as each chunk completes
+
 •	Ensured all intermediate artifacts are written to disk for inspection and parity with offmute’s debugging workflow.
+
 This restructuring was prioritized before further quality improvements, as workflow transparency and output parity were foundational requirements identified in the review.
 
 **Description Reliability & Transcription Progress Tracking**
 
 Observation (Failure Modes Identified)
+
 While testing the updated pipeline, I observed two related issues:
+
 1.	Description outputs were empty
 The generated final_description.json contained:
 2.	{
@@ -256,70 +285,108 @@ The generated final_description.json contained:
 4.	  "imageDescription": "",
 5.	  "audioDescription": ""
 6.	}
+   
 As a result, the Markdown output showed empty or unhelpful sections:
+
 o	Meeting Description
 o	Audio Analysis
 o	Visual Analysis
+
 However, the Full Transcription section was correctly populated.
-7.	Missing transcription progress tracking
+
+8.	Missing transcription progress tracking
+
 Unlike offmute, the pipeline did not persist a transcription_progress.json file capturing:
+
 o	Per-chunk prompts
 o	Raw model responses
 o	Errors (e.g., quota exhaustion)
+
 This reduced debuggability and made it difficult to inspect partial failures.
+
 Interpretation
+
 Further inspection showed that the description phase failed due to API quota limits. When this occurred:
+
 •	The pipeline silently wrote empty strings for description sections.
 •	No explicit signal was surfaced to the user explaining why context was missing.
 •	Transcription continued without context (which is acceptable), but without transparency.
+
 This behavior differed from offmute, which:
+
 •	Explicitly records transcription attempts and failures
 •	Preserves raw prompts and responses for inspection
 •	Makes partial failures visible without halting the pipeline
+
 Decision
+
 To align with offmute’s robustness and observability, I implemented two fixes:
+
 1.	Transcription Progress Tracking
+
 o	Added transcription_progress.json, written incrementally per chunk
+
 o	Each entry records:
+
 	Timestamp
 	Chunk index
 	Full prompt sent to the LLM
 	Raw response (or error message)
+
 o	This ensures all LLM interactions are inspectable, even when failures occur
-2.	Graceful Handling of Failed Description Phase
+
+3.	Graceful Handling of Failed Description Phase
+
 o	When description generation fails (e.g., quota exhaustion), the Markdown output now displays explicit, informative placeholders:
+
 	“Description generation failed due to API quota or other error. Transcription proceeded without contextual grounding.”
+
 o	This preserves structural consistency while clearly signaling degraded context
+
 Outcome
+
 •	final_description.json correctly reflects failure states without ambiguity
 •	The Markdown transcript no longer contains silent empty sections
 •	transcription_progress.json provides full visibility into chunk-level behavior
 •	The pipeline continues operating even under partial model failures, matching offmute’s fault-tolerant design
 
 **Multimodal Pipeline Integration & End-to-End Validation**
+
 Observation
+
 After implementing screenshot extraction, description phases, overlapping chunking, and improved prompts, I encountered an apparent module import warning in describe.ts:
 import { DESCRIPTION_PROMPT, AUDIO_DESCRIPTION_PROMPT, MERGE_DESCRIPTION_PROMPT } from './prompts';
 VS Code reported:
+
 Cannot find module './prompts' or its corresponding type declarations
 However, running the TypeScript compiler (bunx tsc --noEmit) showed no errors, and the application executed successfully. This indicated an editor-level false positive rather than a real build or runtime issue.
 Decision
+
 I validated correctness using the compiler and runtime behavior rather than relying on editor diagnostics. No code changes were required.
 With the pipeline structurally complete, I proceeded to an end-to-end validation run using the reference video (videoplayback.mp4) to verify that the original “Throws Away Video” issue was fully resolved.
+
 Implementation Summary
+
 To address the multimodality gap identified in the review, the following components were added or updated:
+
 New modules
+
 •	screenshot.ts — extracts video frames for visual context
 •	describe.ts — performs multimodal description using screenshots and an audio sample
 •	prompts.ts — centralizes rich prompts including emotion, tone, and continuity
+
 Key pipeline changes
+
 •	Video screenshots are now extracted and analyzed before transcription
 •	A description phase consumes both visual and audio context
 •	Audio is split into 10-minute chunks with overlap, matching offmute’s approach
 •	Chunk-level transcription includes previous context for continuity
 •	Transcription progress and raw LLM interactions are persisted for inspection
+
 End-to-End Verification
+
 Running the tool on videoplayback.mp4 produced the following structure, matching offmute’s workflow:
+
 .southbridge_videoplayback/
 ├── audio/
 │   ├── videoplayback_chunk_0.mp3
@@ -337,13 +404,17 @@ Running the tool on videoplayback.mp4 produced the following structure, matching
     └── raw_transcriptions.json
 
 videoplayback_transcription.md
+
 The Markdown transcript updates incrementally during processing and resolves to a clean final document once complete.
+
 Outcome
+
 •	Video is no longer discarded — screenshots are actively used in analysis
 •	Multimodal context (visual + audio) precedes transcription
 •	Chunk overlap improves speaker continuity at boundaries
 •	Progress and failures are transparently logged
 •	The original “Throws Away Video” criticism is fully addressed
+
 Quota-related failures were observed during testing (expected on free-tier models), but graceful fallback logic allowed the majority of chunks to complete successfully without halting the pipeline.
 
 **Context Chaining (passing the last ~20 lines) and Sequential Processing (not parallel).**
@@ -351,74 +422,110 @@ Quota-related failures were observed during testing (expected on free-tier model
 **Context Continuity & Iterative Alignment (“Chunks Are Islands”)**
 
 Problem
+
 Splitting long recordings into chunks introduces two failure modes:
+
 1.	Loss of conversational continuity — the model has no knowledge of what happened in the previous chunk, leading to speaker identity drift and broken context.
 2.	Invalid timing outputs — transcripts that do not span the expected duration, contain sparse or nonsensical timestamps, or otherwise fail basic sanity checks.
+   
 The initial implementation processed chunks independently and relied only on timestamp offsets, which does not address either issue.
+
 Offmute-Inspired Fix: Context Continuity
+
 To prevent chunks from becoming isolated “islands,” I adopted offmute’s continuity strategy:
+
 •	Audio is split into 10-minute chunks with a 1-minute overlap
 •	The last N lines of the previous chunk’s transcription are passed as context into the next chunk
 •	Transcription prompts explicitly instruct the model to maintain speaker identity and conversational flow across chunk boundaries
+
 This ensures that:
+
 •	Speaker labels remain consistent across chunks
 •	Conversations spanning boundaries are preserved
 •	Overlapping audio prevents hard cut-offs
+
 This directly resolves the “Speaker 1 becomes Speaker 2” issue highlighted in the review.
+
 ipgu-Inspired Fix: Iterative Alignment & Validation
+
 While context continuity improves quality, it does not guarantee correctness. To address this, I implemented ipgu-style iterative alignment principles:
+
 •	Each chunk’s transcription is validated against timing constraints, including:
+
 o	Transcript duration vs. audio duration
 o	Monotonic, sequential timestamps
 o	Minimum expected density of transcript entries
+
 •	If validation fails, the chunk is retranscribed, up to a configurable retry limit
 •	All attempts (successes and failures) are logged for inspection
+
 This shifts the pipeline from “trust whatever the model returns” to a verify-and-retry approach, mirroring ipgu’s core philosophy.
 Outcome
+
 •	Chunks are no longer independent islands
 •	Context flows naturally across chunk boundaries
 •	Speaker consistency is preserved
 •	Transcripts are validated against real-world timing expectations
 •	Invalid outputs trigger retries instead of silently producing garbage
+
 Together, these changes combine offmute’s continuity techniques with ipgu’s iterative alignment strategy, addressing both the structural and quality shortcomings identified in the original review.
 
 **Verification of Context Continuity & Iterative Alignment**
 
 After implementing offmute-style context continuity and ipgu-style validation, I explicitly verified that these mechanisms functioned as intended rather than assuming correctness based on code alone.
 Validation Module Verification
+
 I performed targeted dry-run checks on the new validation logic to ensure it correctly identifies failure cases and behaves as expected:
 •	Valid transcript
+
 Verified that transcripts spanning sufficient duration pass validation and report accurate coverage and speaker statistics.
 •	Low-coverage transcript
+
 Confirmed that transcripts with sparse timestamps (e.g., only a few lines for a long chunk) are flagged with timing-underflow issues.
 •	Empty transcript
+
 Ensured empty outputs are detected and rejected rather than silently accepted.
 •	Speaker normalization
+
 Verified that generic speaker labels (e.g., “Speaker 1”) are correctly normalized to known speaker identities when available.
+
 This confirms that the validator catches exactly the failure mode described in the review:
+
 “A 20-minute chunk with only 3 lines at 0:00, 0:05, 0:10.”
 Context Passing & Overlap Verification
+
 I verified that offmute-style continuity is correctly wired:
+
 •	Chunk configuration
+
 o	Chunk duration: 10 minutes
 o	Overlap: 60 seconds
 o	Overlap confirmed by verifying that chunk N+1 starts before chunk N ends
+
 •	Context passing
+
 o	Confirmed that the last 20 lines of the previous chunk’s transcription are injected into the next chunk’s prompt
 o	Verified that prompts include explicit continuity and speaker-consistency instructions
+
 This ensures that chunks are no longer processed as isolated islands.
+
 Prompt Structure Verification
+
 I verified that transcription prompts include:
+
 •	Chunk position (e.g., “chunk 2 of 7”)
 •	Meeting-level description context
 •	A clearly delimited “Previous Transcription” section
 •	Explicit instructions to maintain speaker consistency and continue seamlessly
+
 Outcome
+
 •	Context continuity across chunks is working as intended
 •	Overlapping audio prevents boundary loss
 •	Timing validation detects hallucinated or incomplete transcripts
 •	Failed chunks are retried with corrective hints instead of silently accepted
 •	Speaker identity is preserved and normalized across the entire recording
+
 These checks confirm that the implementation goes beyond structural code changes and behaves correctly under realistic failure scenarios.
 
 **Upgrade Your Prompt Template**
@@ -426,54 +533,76 @@ These checks confirm that the implementation goes beyond structural code changes
 **Focus: Prompt Depth — Capturing Tone, Intent, and Continuity**
 
 The original transcription prompt was minimal and focused primarily on converting audio to text with speaker labels. This failed to capture the deeper qualities explicitly called out in the task (tone, intent, emotion), and did not leverage context from earlier chunks or the description phase.
+
 Changes Made
+
 I redesigned the transcription prompt to more closely match offmute’s approach:
 •	Meeting-level context
+
 Injects the high-level meeting description generated during the description phase.
 •	Continuity across chunks
+
 Includes the last segment of transcription as read-only context with explicit instructions not to re-transcribe it.
 •	Tone, emotion, and non-verbal cues
+
 Adds structured guidance to annotate emotions, hesitation, sarcasm, pauses, and interruptions only when clearly inferable, avoiding hallucination.
 •	Multimodal grounding
+
 Explicitly instructs the model to use visual context from extracted screenshots when identifying speakers and interpreting reactions.
 •	Stricter output contract
+
 Enforces a structured JSON schema including start/end timestamps, speaker identity, text, and tone classification.
 Verification
+
 I verified that the generated prompt includes:
+
 •	Chunk position and total count
 •	Meeting description context
 •	Previous transcription context with “DO NOT re-transcribe” guard
 •	Explicit tone and emotion instructions
 •	Speaker consistency requirements
 •	Structured JSON output with tone metadata
+
 This brings the prompt in line with offmute’s emphasis on intent, continuity, and multimodal reasoning rather than simple speech-to-text conversion.
 
 **Verifying Tone & Intent Capture in Transcription**
 
 After enhancing the transcription prompt to explicitly capture tone, intent, and non-verbal cues, I verified the behavior by re-running the tool on the reference videoplayback.mp4 using a fresh API key.
 Verification Method
+
 I inspected outputs across all artifact layers to confirm that prompt changes materially affected results:
 Observed Outcomes
+
 Speech patterns are preserved, including:
+
 •	Filler words (“um”, “uh”, “you know”, “like”)
 •	Hesitation and repetition (“I I I think…”, “for the for the…”)
 •	Laughter and reactions (“(laughing)” as standalone or inline markers)
 •	Trailing or interrupted phrases
+
 Where Results Are Visible
+
 1.	Per-chunk raw JSON outputs
+   
 (.southbridge_videoplayback/transcription/chunk_X_raw.json)
+
 o	Entries include speaker, start, end, text, and tone
 o	Tone fields are populated where inferable
 o	Emotional and non-verbal cues are embedded in text
+
 2.	Live-updating Markdown transcript
+
 (videoplayback_transcription.md)
 o	Emotional cues appear inline
 o	Natural speech is preserved rather than normalized
 o	Speaker continuity is maintained across chunks
+
 3.	SRT output
 (videoplayback.srt)
+
 o	Confirms timestamps and tone cues survive formatting
 Result
+
 All 7 chunks completed transcription with validation enabled
 (coverage: 100%, 100%, 100%, 89%, 51.8%, 100%, 82%).
 When Gemini Pro hit quota limits, the system fell back to Gemini Flash, and transcription continued successfully. This confirms that tone- and intent-aware prompting works in practice and degrades gracefully under model fallback.
@@ -484,19 +613,28 @@ When testing the full pipeline on videoplayback.mp4, the description phase (meet
 Observation
 The logs showed explicit API errors:
 [429 Too Many Requests] – gemini-2.5-pro
+
 As a result, the generated markdown contained fallback notices:
+
 •	(Description generation failed due to API quota…)
 •	(Audio analysis was skipped or failed.)
 •	(Visual analysis was skipped or failed.)
+
 Diagnosis
+
 This was not a prompt or logic error. The transcription phase already implemented model fallback (Pro → Flash → Flash-lite), but the description phase methods (analyzeImages, analyzeAudio, mergeDescriptions) attempted only a single model and failed immediately on quota exhaustion.
+
 Fix
+
 I added the same retry and fallback logic used in transcription to all description-phase methods, ensuring:
 •	Visual analysis retries on alternate models
 •	Audio analysis retries on alternate models
 •	Description merging retries on alternate models
+
 Result
+
 After this change:
+
 •	Description, audio analysis, and visual analysis now degrade gracefully under quota pressure
 •	The pipeline behaves consistently across all AI phases
 •	Full multimodal context is generated whenever any supported model has available quota
