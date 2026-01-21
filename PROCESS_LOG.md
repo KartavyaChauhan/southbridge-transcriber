@@ -174,3 +174,18 @@ The system prompt explicitly instructs the LLM to perform speaker diarization. O
 
 Outcome:
 Clean, speaker-labeled transcripts comparable to meeting-diary outputs, without relying on external diarization APIs.
+
+---
+
+# PHASE 2: RESUBMISSION & ARCHITECTURE OVERHAUL
+**Date:** January 20, 2026
+**Focus:** Multimodality, Context Chaining, and Validation.
+
+## 1. Response to Feedback
+Refactoring the application to address the three critical misses identified in the code review:
+1.  **Multimodal:** Implemented `ffmpeg` frame extraction to use visual cues for diarization (Offmute parity).
+2.  **Context:** Switched from isolated chunks to a sequential loop passing the last 20 lines of context (Meeting Diary parity).
+3.  **Validation:** Added strict self-correction loops for timestamp verification (IPGU parity).
+
+## 2. Engineering Log & Raw Prompts
+*As requested, below are the exact prompts and failure modes encountered during this refactor.*

@@ -23,7 +23,20 @@ export interface ValidationIssue {
   type: 'timing_gap' | 'timing_overflow' | 'timing_underflow' | 'speaker_inconsistency' | 'empty_transcript';
   severity: 'error' | 'warning';
   message: string;
-  details?: any;
+  details?: {
+    gap?: number;
+    coverage?: number;
+    expected?: number;
+    actual?: number;
+    speakers?: string[];
+    expectedDuration?: number;
+    transcriptSpan?: number;
+    lastTimestamp?: number;
+    maxGapSeconds?: number;
+    namedKnownSpeakers?: string[];
+    genericSpeakers?: string[];
+    newSpeakers?: string[];
+  };
 }
 
 export interface TranscriptStats {
@@ -161,7 +174,7 @@ export function validateTranscript(
       type: 'timing_gap',
       severity: 'warning',
       message: `Large gap of ${largestGap}s detected in transcript (max allowed: ${fullConfig.maxGapSeconds}s)`,
-      details: { largestGap, maxGapSeconds: fullConfig.maxGapSeconds }
+      details: { gap: largestGap, maxGapSeconds: fullConfig.maxGapSeconds }
     });
   }
 

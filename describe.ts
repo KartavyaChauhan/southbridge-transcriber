@@ -1,11 +1,12 @@
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import ora from 'ora';
 import chalk from 'chalk';
 import { extractVideoScreenshots, isVideoFile } from './screenshot';
 import type { ScreenshotInfo } from './screenshot';
 import { extractAudio } from './audio';
 import { DESCRIPTION_PROMPT, AUDIO_DESCRIPTION_PROMPT, MERGE_DESCRIPTION_PROMPT } from './prompts';
+import type { GeminiClient } from './ai';
 
 /**
  * Result of the description phase
@@ -36,7 +37,7 @@ export interface DescriptionOptions {
   /** Custom instructions to include in prompts */
   userInstructions?: string;
   /** API client for Gemini calls */
-  apiClient: any;
+  apiClient: GeminiClient;
 }
 
 /**

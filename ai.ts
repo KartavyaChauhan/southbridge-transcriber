@@ -2,10 +2,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GoogleAIFileManager, FileState } from '@google/generative-ai/server';
 import ora from 'ora';
 import chalk from 'chalk';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
 import { CANDIDATE_MODELS, MODEL_COSTS } from './config';
 import { SIMPLE_TRANSCRIPTION_PROMPT, REPORT_PROMPT } from './prompts';
+import type { TranscriptSegment, CostEstimate } from './types';
 
 /**
  * Model name mapping for CLI convenience
@@ -16,22 +16,14 @@ const MODEL_MAP: Record<string, string> = {
   'flash-lite': 'models/gemini-2.0-flash-lite',
 };
 
-/**
- * Cost tracking for API usage
- */
-export interface CostEstimate {
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  estimatedCost: number;
-}
+// CostEstimate type is imported from types.ts
 
 export class GeminiClient {
-  private genAI: GoogleGenerativeAI;
-  private fileManager: GoogleAIFileManager;
-  private preferredModel: string | null;
-  private customInstructions: string | null;
-  private usageStats: CostEstimate[] = [];
+  private readonly genAI: GoogleGenerativeAI;
+  private readonly fileManager: GoogleAIFileManager;
+  private readonly preferredModel: string | null;
+  private readonly customInstructions: string | null;
+  private readonly usageStats: CostEstimate[] = [];
 
   constructor(apiKey: string, preferredModel?: string, customInstructions?: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
@@ -176,11 +168,11 @@ export class GeminiClient {
    * Generates a meeting report from the transcript.
    * Analyzes the transcript for key points, decisions, and action items.
    */
-  async generateReport(transcript: any[]): Promise<any> {
+  async generateReport(transcript: TranscriptSegment[]): Promise<Record<string, unknown>> {
     const spinner = ora('Generating meeting report...').start();
 
     // Convert transcript to text for the AI
-    const transcriptText = transcript.map((item: any) => 
+    const transcriptText = transcript.map((item: TranscriptSegment) => 
       `[${item.start}] ${item.speaker}: ${item.text}`
     ).join('\n');
 
